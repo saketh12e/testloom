@@ -1,1 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect x="52" y="52" width="920" height="920" rx="214" fill="#eeede5"/><rect x="75" y="75" width="874" height="874" rx="193" fill="none" stroke="#c9cbbb" stroke-width="9"/><path d="M256 462h190v-26H266z" fill="#35382f"/><text x="242" y="682" font-family="Georgia,serif" font-size="610" font-style="italic" font-weight="bold" fill="#34372e">j</text><text x="418" y="672" font-family="Georgia,serif" font-size="596" font-style="italic" font-weight="bold" fill="#be6038">p</text><circle cx="806" cy="222" r="43" fill="#be6038"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Testloom</title><desc id="description">A woven thread mark in warm ivory on forest green.</desc>
+  <defs><linearGradient id="surface" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#327665"/><stop offset="1" stop-color="#215c50"/></linearGradient></defs>
+  <rect x="52" y="52" width="920" height="920" rx="212" fill="url(#surface)"/>
+  <rect x="56" y="56" width="912" height="912" rx="208" fill="none" stroke="#ffffff" stroke-opacity=".13" stroke-width="8"/>
+  <g transform="translate(112 112) scale(20)" fill="none" stroke="#f6f7ef" stroke-width="3.7" stroke-linecap="round">
+    <path d="M9 9h13c6 0 9 4 9 10v12M9 20h22M9 31h13M20 9v22"/>
+    <path d="M9 9v22" opacity=".45"/>
+  </g>
+</svg>

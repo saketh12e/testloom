@@ -1,83 +1,57 @@
-<p align="center"><img src="assets/icon.png" width="88" alt="JourneyProof" /></p>
+<p align="center"><img src="assets/icon.png" width="88" alt="Testloom" /></p>
 
-# JourneyProof
+# Testloom
 
-### Show the journey. Prove the outcome.
+**Turn a browser journey into a test suite you can edit, run, and keep.**
 
-**A Mac testing workspace that turns a browser demonstration and an explicit requirement into tests for your local codebase.** Record the flow, define what should be true, let Codex adapt the test to your project, and inspect the execution evidence.
+Testloom is an open-source Mac workspace for people who know how an application should behave. Connect your local test project, record a flow, and spell out the expected result. Use Codex to adapt tests to your project, Claude Code as an alternative, or portable Playwright templates without an AI account. Review the code and execution evidence, then take the tests back to your repository.
 
-[Download for Apple Silicon](https://github.com/saketh12e/journeyproof/releases/tag/v0.1.0) · [Five-minute walkthrough](docs/GETTING-STARTED.md) · [Research & design](docs/RESEARCH.md) · [Validation](docs/VALIDATION.md)
+**v0.2 is an unsigned Apple Silicon developer preview.** See [release notes](docs/RELEASE-0.2.md), [release assets](https://github.com/saketh12e/testloom/releases), and the version-specific [validation record](docs/VALIDATION.md).
 
-![JourneyProof desktop workspace](assets/overview.png)
+![Testloom desktop workspace](assets/overview.png)
 
-## What it does
+- **Build a reusable library.** Keep up to 500 cases per project; select 1–20 enabled cases for a generation batch.
+- **Cover success, rejection, and boundaries.** Duplicate a case, edit inputs, locators and assertions, and organize it with tags, priority and enabled status. An expected rejection is a passing test when the asserted behavior occurs.
+- **Keep the evidence.** Editing a case preserves its original recording. Generated files have separate case folders, and the latest 100 generation records remain in project history.
+- **Control agent context.** Choose the provider, model, effort and time budget; review instructions and the prompt, exclude source excerpts, and set a Claude dollar cap. [Agent controls](docs/AGENTS.md) explains the boundaries.
+- **Own the output.** Import/export portable JSON suites and export ordinary test code, a patch, and available verification evidence. Running exported tests needs neither Testloom nor another model call.
 
-- **Connect a folder.** Inspect the framework, build commands, existing tests, helpers and configuration. No repository upload or Git requirement.
-- **Record a real browser.** Capture ordered actions, locator candidates, navigation and request metadata in an open [scenario format](docs/SCENARIO-FORMAT.md). Sensitive fields are redacted; screenshots are optional.
-- **Make the expectation explicit.** Keep business requirements separate from observed behavior. A buggy total must not become the expected total.
-- **Generate reviewable tests.** Use your installed Codex CLI and account, or the deterministic Playwright TypeScript / Java generator. Review new files before running them.
-- **Verify and hand off.** Run in an isolated source copy, repeat checks, confirm generated Playwright test discovery, and export the scenario, patch and execution evidence bound to generated file hashes.
+## Try it on your Mac
 
-The connected folder is not edited by generation. The exported tests are ordinary code that runs without JourneyProof or an AI call.
-
-## Try it
-
-The **Apple Silicon preview** is available in [Releases](https://github.com/saketh12e/journeyproof/releases/tag/v0.1.0). Unzip and move JourneyProof to Applications. The preview is not signed with an Apple Developer identity or notarized; macOS may require **System Settings → Privacy & Security → Open Anyway** for the downloaded app. The source build is also available below. Do not disable system-wide security controls.
-
-Install **Node.js 20.19+** for the sample and npm-based projects. Install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login` to use Codex mode. JourneyProof collects no API key and supplies no model credits. Your existing Codex configuration controls account access and model usage. Portable mode needs no AI account.
-
-From source:
+Use **Node.js 20.19+** for the cart demo and npm projects. From a source checkout:
 
 ```sh
-git clone https://github.com/saketh12e/journeyproof.git
-cd journeyproof
+git clone https://github.com/saketh12e/testloom.git
+cd testloom
 npm ci
 npm run browsers
 npm start
 ```
 
-In the app:
+Previously named JourneyProof. The [original repository URL](https://github.com/saketh12e/journeyproof) redirects here; existing local folders can keep their names.
 
-1. Select **Try the cart demo**, then **Start recording**.
-2. Add the **$40 Field notebook** and **$60 Canvas bag**. Apply **SAVE10**.
-3. Return to JourneyProof and stop recording. Review the prefilled requirement: `total` must show **$90.00**.
-4. Select **Codex** or **Portable generator**, then **Generate test**.
-5. Review the file, run verification, and export the bundle.
+For a packaged preview, download the **v0.2 Apple Silicon** asset from Releases, unzip it and move **Testloom.app** to Applications. It is not Apple Developer signed or notarized. If macOS blocks it, review the download source and use **System Settings → Privacy & Security → Open Anyway** for that app; keep system-wide protections enabled.
 
-Chromium can be installed with `npm run browsers` from the source folder. The recorder can use an installed Google Chrome as a fallback. The test runner may still require its pinned Playwright Chromium. See the [walkthrough and troubleshooting](docs/GETTING-STARTED.md).
+1. Open **Try the cart demo**. It includes three hand-authored cases for valid, invalid and empty coupons.
+2. Review the cases, select them, choose **Portable**, and generate the batch.
+3. Review the files, use **Generated tests · confirm discovery**, and inspect every run.
+4. Record your own journey: add the $40 notebook and $60 bag, apply **SAVE10**, then stop. Add the requirement that `total` shows **$90.00**.
+5. Edit or duplicate the saved case and export the suite or evidence bundle.
 
-## Supported in 0.1
+For Codex, install the [official CLI](https://developers.openai.com/codex/cli), run `codex login`, and refresh agent availability in Testloom. Claude uses your separately installed and authenticated Claude Code CLI. Testloom supplies no model credits and collects no API key. Model calls use your CLI configuration and account policies.
 
-| Area | Current scope |
-| --- | --- |
-| Desktop | Native Electron app; Apple Silicon package exercised on macOS 26.5.1. Intel builds are available from source but not validated here. |
-| Agent | Installed Codex CLI, noninteractive structured generation, read-only sandbox. Claude adapter is not implemented. |
-| Portable tests | Playwright TypeScript and Playwright Java / JUnit 5. Java example pins the published Java package version 1.62.0. |
-| Existing projects | npm, Maven and Gradle detection; Playwright and Selenium clues; bounded source context for Codex adaptation. Detection is not universal framework support. |
-| Evidence | Ordered ledger, explicit assertions, optional local screenshots, patch, per-run output, generated file hashes, Playwright discovery checks. |
+![A recorded journey and explicit requirements](assets/recorded-journey.png)
 
-This is a **working developer preview**, with explicit [limitations](docs/LIMITATIONS.md). It does not cover every browser interaction, prove every business rule, or guarantee stable tests on arbitrary projects.
+[Full walkthrough and troubleshooting](docs/GETTING-STARTED.md) · [Java example](examples/java/README.md) · [Suite format](docs/SCENARIO-FORMAT.md)
 
-## Evidence over claims
+## Checked against a real defect
 
-The release checks include a real browser recording, native desktop generation and execution, an actual Codex-generated test, and a compiled Java test. The coupon tests pass against the healthy cart and fail against a disclosed mutation that returns **$95 instead of $90**. The regression suite covers privacy filtering, path boundaries, immutable exported test bytes, process-tree cancellation, skipped-test detection and recorder shutdown. Exact commands and outcomes are in [Validation](docs/VALIDATION.md).
+The v0.2 checks include actual Codex generation for positive and negative coupon cases, a three-case Portable batch, and three compiled Java cases. The healthy cart passes; the unchanged positive test catches a deliberately broken discount: **$90.00 expected, $95.00 received**. Original source hashes remain unchanged. See [Validation](docs/VALIDATION.md) for commands, environments and outcomes.
 
-```sh
-npm run check          # types, regression tests, production build
-npm run test:journey   # real recording → generated test → pass and mutant failure
-npm run test:desktop   # actual native desktop flow; requires a graphical Mac session
-```
+![Verification output in the desktop app](assets/verified-journey.png)
 
-[Java walkthrough](examples/java/README.md) · [Cart fixture](examples/cart/README.md) · [Architecture](docs/ARCHITECTURE.md) · [Scenario schema](schemas/scenario-v1.schema.json)
+The preview has bounded recording/framework support and heuristic redaction. A source copy is **not an OS sandbox**: trusted test scripts and browser actions run with your permissions. Review prompts, generated assertions and exports; a passing run establishes the checked behavior, not complete coverage. [Limitations](docs/LIMITATIONS.md) and [Roadmap](docs/ROADMAP.md) explain the remaining work.
 
-## Trust boundaries
+## Build with us
 
-Recording is local. Codex mode sends the scenario and selected source excerpts through your Codex configuration. Screenshots stay local unless you export them. Redaction is heuristic: review the context and artifacts before using confidential data.
-
-A source copy is **not an OS sandbox**. Verification runs trusted repository commands with your local user permissions; scripts and browser workflows can have effects outside the copy. The recommended Playwright command checks actual test discovery. Custom commands report their exit status and require manual confirmation that the intended tests ran. Passing execution is not proof of complete requirement coverage.
-
-## Contribute
-
-The project is MIT licensed. Start with [CONTRIBUTING.md](CONTRIBUTING.md), the [architecture](docs/ARCHITECTURE.md), and [research decisions](docs/RESEARCH.md). Useful next contributions include additional runner adapters, an isolated recorder world, richer fixture mapping, and carefully bounded repair proposals that preserve requirements. Please include a failing reproduction and execution evidence with behavioral changes.
-
-[Security policy](SECURITY.md) · [MIT license](LICENSE)
+MIT licensed. Read [Contributing](CONTRIBUTING.md), [Architecture](docs/ARCHITECTURE.md), [Research](docs/RESEARCH.md), and [Security](SECURITY.md). Upgrading from JourneyProof? Existing data and `.journeyproof` paths are intentionally retained; follow [Migration](docs/MIGRATION.md).

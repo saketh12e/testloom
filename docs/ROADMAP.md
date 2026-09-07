@@ -1,18 +1,24 @@
 # Roadmap
 
-The 0.1 release completes a local Mac recording → explicit requirement → generated test → execution evidence → export workflow. Its next increments should be driven by reproductions from real test repositories.
+Testloom v0.2 adds persisted case libraries, editable variants, suite exchange, selected batches and configurable Codex/Claude adapters. These are preview capabilities. Broader rollout needs evidence from the environments people will actually use.
 
-## Next engineering priorities
+| Priority | Next work | Evidence needed before calling it ready |
+| --- | --- | --- |
+| Release distribution | Apple Developer signing/notarization and repeatable release packaging | Install, launch, record, generate, verify and export on a clean Apple Silicon Mac; publish versions, checksums and failures |
+| Provider compatibility | Maintain an explicit CLI/model compatibility matrix | Actual authenticated Codex and Claude runs with structured outputs; healthy control and unchanged-test defect detection; distinguish outages and budget failures |
+| Batch reliability | Exercise libraries and selected batches in real projects | Restart/switch/import/edit/disable/cancel reproductions; no case-output collisions; report discovery and unchanged-source evidence for the exact build |
+| Java and other runners | Add Maven/Surefire, Gradle and further report adapters | Detect missing, skipped and unexpected generated-test outcomes, with healthy controls and failing witnesses |
+| Recorder isolation | Move instrumentation out of the page world and publish an interaction capability matrix | Reproductions for frames, shadow DOM, popups, uploads, dialogs and shutdown; unsupported cases remain explicit |
+| Context quality | Add dependency-aware retrieval and refresh controls | Show which helpers/imports are included, what is stale or omitted, and that exclusions survive refresh; bound prompts visibly |
+| History and storage | Add case revisions, explicit retention and reviewed cleanup | Restore a requirement revision without rewriting raw evidence; remove only selected owned artifacts; document recovery and disk use |
+| Safe repair proposals | Generate a new reviewable proposal from a failure | Keep requirement IDs and expectations unchanged; the repaired test must pass a healthy control and detect the same known defect |
+| Broader coverage | Reviewed visual requirements, more browser engines and platform testing | Privacy controls plus actual assertion evidence and a published machine/browser matrix |
 
-1. Move recorder instrumentation to an isolated browser world, with documented semantics for frames, shadow DOM, dialogs, downloads and uploads. Add a visible replay capability matrix per event.
-2. Add Maven/Surefire, Gradle and additional runner report adapters that prove generated-test discovery as explicitly as the Playwright adapter.
-3. Retrieve repository context from imports and fixture dependencies, with a preview and selectable exclusions before model submission.
-4. Introduce saved scenario collections, editable action descriptions and fixture bindings. Preserve immutable raw observations and version every requirement edit.
-5. Add bounded repair proposals that consume failures and produce reviewable new tests while preserving requirements. Validate against known defect fixtures; never optimize simply for a green result.
-6. Support reviewed screenshot attachments, visual requirements and richer state evidence with local privacy controls.
-7. Add a documented provider interface for Claude and other coding agents without changing the scenario format or requiring AI for routine test execution.
-8. Establish Apple Developer signing/notarization, clean-machine installers and an Intel/Apple Silicon test matrix before calling distribution production-ready.
+## Roll out in stages
 
-## Contribution bar
+1. **Personal evaluation:** run the synthetic demo and inspect the case JSON, generated files and actual results. Keep a backup when upgrading preview data.
+2. **One trusted module:** review the commands and context, supply disposable test data, and prove a healthy pass plus a known-defect failure with the same generated test. Export reviewed code through the team's normal review process.
+3. **Team pilot:** record toolchain versions, observed false passes, repeatability, provider failures and maintenance effort. Agree on data-sharing and storage practices before confidential work.
+4. **Broader adoption:** complete relevant release, runner and provider checks above; define supported versions and a security response policy. Publish the actual limits and remaining failures.
 
-For each new capability, supply the user-facing behavior, an unsupported-case boundary, a focused reproduction, a healthy control, and an actual failure witness where appropriate. Keep requirement changes separate from automation repairs. Measure first successful test time, generated-test discovery, false passes, repeatability and maintenance effort rather than lines of generated code or star counts.
+Measure time to a useful reviewed test, generated-test discovery, defect detection, false passes and maintenance effort. A 500-case storage limit does not establish 500-case execution quality, and it says nothing about thousands of verified tests. No production-readiness date is promised.

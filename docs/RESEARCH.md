@@ -1,42 +1,46 @@
 # Research and design decisions
 
-Official primary documentation checked live on **2026-09-07**. These sources describe upstream capabilities; the decisions below are JourneyProof's engineering choices. They are not independent verification of this application's implementation.
+The v0.2 agent review checked the primary [Codex non-interactive guide](https://learn.chatgpt.com/docs/non-interactive-mode), [Claude programmatic-use guide](https://code.claude.com/docs/en/headless) and [Claude CLI reference](https://code.claude.com/docs/en/cli-reference) on **2026-09-07**. The adapter decisions below were compared with this checkout's source. Upstream capabilities and code inspection are separate from live Testloom validation.
 
-## Existing recorders and prior art
+## Established recorder workflows
 
-| Primary source | What already exists | JourneyProof decision |
+| Primary reference | Existing capability | Testloom's design choice |
 | --- | --- | --- |
-| [Playwright test generator](https://playwright.dev/docs/codegen) | Interactive action recording, locator generation, and explicitly selected visibility/text/value assertions. | Do not claim that recording tests or adding assertions is new. Keep explicit requirements alongside recorded actions and review generated locators. |
-| [Playwright VS Code integration](https://playwright.dev/docs/getting-started-vscode) | Recording, running, debugging, and trace inspection integrated with an editor. | A desktop workflow must earn its place through project adaptation and understandable evidence, not claim to be the first integrated test tool. |
-| [Chrome DevTools Recorder](https://developer.chrome.com/docs/devtools/recorder) | Recording, replaying, editing, exporting, and measuring browser flows. | A browser flow is a useful input artifact; recording alone does not establish the intended business outcome. |
-| [Selenium IDE](https://www.selenium.dev/selenium-ide/) | Existing open-source record-and-playback testing, reusable commands, and control-flow features. | Acknowledge established recorder workflows. Do not describe Selenium users as lacking recording tools. |
+| [Playwright test generator](https://playwright.dev/docs/codegen) | Action recording, locator generation and explicitly selected assertions | Keep user expectations distinct from recorded behavior and review locator choices |
+| [Playwright VS Code integration](https://playwright.dev/docs/getting-started-vscode) | Recording, execution, debugging and trace inspection in an editor | Make the desktop useful through editable suites, project adaptation and understandable evidence |
+| [Chrome DevTools Recorder](https://developer.chrome.com/docs/devtools/recorder) | Recording, replay, editing and export of browser flows | Treat a recording as a reusable input, not a specification of business correctness |
+| [Selenium IDE](https://www.selenium.dev/selenium-ide/) | Open-source record/playback workflows and reusable commands | Acknowledge prior art rather than claim recording or reusable tests are new |
 
-JourneyProof's proposed contribution is **integration**: connect a local test repository, record a journey, attach user-authored requirements, adapt or generate reviewable tests, execute the selected command, and package the evidence. Requirements and verification are central to that combination. No claim of inventing record/replay, assertion generation, AI-generated tests, or a globally unique product is made. This is a focused prior-art review, not an exhaustive novelty or patent search.
+These references carry forward the v0.1 design review. Testloom combines a local project, recorded journey, explicit requirements, editable variants, agent/template generation and execution evidence. This is not a claim to invent recording, AI-generated tests or assertions. The name and this focused review do not establish trademark clearance, patent clearance or global novelty.
 
-## Playwright: actions, assertions, and traces
+## Codex as the primary adapter
 
-[Playwright codegen](https://playwright.dev/docs/codegen) can record actions and assertions that a person selects. It does not determine a shop's correct discount policy merely from observed behavior. **Decision:** store requirements separately as `Assertion` objects with `source: 'user'`; the user specifies that SAVE10 must yield $90.00 even when a mutated app displays $95.00.
+The [non-interactive guide](https://learn.chatgpt.com/docs/non-interactive-mode) documents CLI execution, JSON events, schema-constrained final output and saved authentication. Testloom uses that interface with an explicit read-only sandbox and a fresh temporary working directory. It sends the reviewed bounded prompt through stdin, then validates the returned summary, warnings and file list. There is no Codex SDK dependency.
 
-The [Tracing API](https://playwright.dev/docs/api/class-tracing) documents a concrete distinction: `context.tracing` records browser operations and network activity, but not test assertions such as `expect` calls. Tracing configured through Playwright Test includes assertions. **Decision:** do not treat a raw recording trace as a tested requirement; use the selected runner's result and review its assertion evidence. Traces are diagnostic artifacts, not proof of comprehensive coverage.
+Model and effort settings are passed to the installed CLI; the app does not promise every account/model combination. Temporary agent files are cleaned after the invocation. The user's CLI configuration still matters, so an empty working directory is not a claim that all possible local reads or integrations are confined to the prompt. See [Agent controls](AGENTS.md).
 
-[Playwright webServer configuration](https://playwright.dev/docs/test-webserver) manages startup and supports reusing an existing process. **Decision:** the sample's normal local run can use the app-owned server, while CI and mutation checks require a fresh one. Otherwise, setting a mutation environment variable could accidentally test an already-running healthy server. The sample uses one managed Chromium project; this does not claim coverage across browser engines.
+## Claude as a portable CLI alternative
 
-## Electron: isolation is a boundary, not a blanket guarantee
+Anthropic documents [non-interactive print mode and structured output](https://code.claude.com/docs/en/headless). Testloom reads the terminal structured result, rejects failed completion and permission-denial results, and applies the same generated-file contract as Codex. It does not parse arbitrary prose into a patch.
 
-[Context Isolation](https://www.electronjs.org/docs/latest/tutorial/context-isolation) separates preload and page JavaScript contexts. It also warns that exposing unfiltered IPC remains unsafe. **Decision:** expose one narrow method per supported operation through a typed preload API, validate calls in the privileged process, and avoid giving the recorded website access to desktop capabilities.
+The [CLI reference](https://code.claude.com/docs/en/cli-reference) distinguishes available tools from approval rules and documents model, effort and dollar-budget controls. Testloom disables built-in tools and supplies an empty strict MCP configuration, disables hooks/plugins and session persistence, and starts outside the project. Its authentication remains the user's CLI responsibility. The adapter does not use bare mode because that mode omits subscription/keychain authentication, as described in [programmatic use](https://code.claude.com/docs/en/headless).
 
-Electron's [security guidance](https://www.electronjs.org/docs/latest/tutorial/security) recommends context isolation, renderer sandboxing, disabling Node integration for remote content, limiting navigation/window creation, and validating IPC senders. [Process sandboxing](https://www.electronjs.org/docs/latest/tutorial/sandbox) explains renderer restrictions and privileged delegation. **Decision:** keep desktop UI privileges separate from the Playwright page. Neither renderer isolation nor copying a project provides OS isolation for npm/Maven/Gradle scripts. Those commands can have external effects with the user's permissions.
+Claude is an alternative authoring adapter, not a dependency of the suite format or exported tests. The per-case budget is passed to the CLI; it is not a Testloom billing service or batch-wide cap. Documented flags and local adapter tests do not establish a successful live-provider run.
 
-## Codex: structured generation and account ownership
+## Preserve assertions and inspect execution
 
-The official [noninteractive-mode documentation](https://developers.openai.com/codex/noninteractive) documents `codex exec`, JSONL event output via `--json`, and a schema-conforming final response requested with `--output-schema`. Its [CLI reference](https://developers.openai.com/codex/cli/reference) also documents the output path, working directory, and sandbox options. These URLs currently redirect to OpenAI's ChatGPT Learn documentation. The local `codex exec --help` was also inspected to confirm the relevant options.
+The [Playwright tracing API](https://playwright.dev/docs/api/class-tracing) distinguishes browser-operation traces from assertion-aware Playwright Test tracing. Testloom therefore keeps user-authored requirements separate from traces and screenshots. A recorded $95.00 total cannot overwrite the requirement for $90.00.
 
-**Decision:** use noninteractive CLI execution and a structured final file list, rather than interpreting prose as an unrestricted patch. Run read-only generation in an empty working directory with bounded, redacted test examples and the scenario ledger. There is no SDK dependency. Screenshots are not currently attached to generation; opt-in recent screenshots are planned. Validate returned paths, sizes, duplicate names, and allowed output directories before appending tests into the copy. Schema conformance is not a correctness or security proof. The verification phase separately executes trusted project commands with local user rights.
+The [Playwright JSON reporter](https://playwright.dev/docs/test-reporters#json-reporter) supports structured discovery evidence. Testloom's generated-files command disables retries and inspects report outcomes. File discovery is stronger than an unexplained zero exit status, but does not independently prove complete assertion coverage. Java/custom runner adapters remain roadmap work.
 
-The official [authentication documentation](https://developers.openai.com/codex/auth) describes signing in with a ChatGPT account and a separate API-key option. **Decision:** JourneyProof's documented setup uses the user's installed CLI and account login. JourneyProof collects no API key and does not supply model credits. Existing CLI configuration and account policies govern access and data handling. Portable generation avoids a model call; Codex mode is not an offline operation.
+The [webServer configuration](https://playwright.dev/docs/test-webserver) supports owned startup and optional server reuse. The desktop demo uses its selected loopback port and copied config; controlled mutation checks need a fresh server so a healthy existing process cannot hide the defect.
 
-## Release evidence
+## Desktop isolation and source context
 
-The release validation exercises the real desktop flow, recording-to-test integration, actual Codex generation, and Java compilation/execution. Healthy and deliberately broken discount fixtures distinguish successful execution from defect detection. Commands, versions and outcomes are recorded in [Validation](VALIDATION.md). Research citations alone cannot supply this evidence.
+Electron's [context-isolation guidance](https://www.electronjs.org/docs/latest/tutorial/context-isolation) and [security recommendations](https://www.electronjs.org/docs/latest/tutorial/security) motivate the narrow preload API, sender checks, isolated renderer and restricted navigation. The recorded website lives in a separate browser. Neither renderer isolation nor a source copy is an OS sandbox for trusted project commands.
 
-The official [Playwright JSON reporter](https://playwright.dev/docs/test-reporters#json-reporter) documents structured run output and the `PLAYWRIGHT_JSON_OUTPUT_FILE` environment variable. JourneyProof's recommended command targets generated files and uses this report to reject missing, skipped, expected-failure, or retry-only results. This checks runner evidence; it does not independently prove assertion completeness or protect against a malicious trusted test runner.
+Context selection is explicit and bounded: cached tests/helpers/configuration, user-added project files, exclusions and an outgoing prompt preview. This is not full-codebase ingestion or dependency-aware retrieval. Screenshots remain outside generation. Heuristic redaction and schema/path checks reduce exposure and bad writes without establishing confidentiality or test correctness.
+
+## Evidence required for a release claim
+
+Use [VALIDATION.md](VALIDATION.md) for actual commands, versions, environments and outcomes. Keep real browser recording, native desktop, packaged app, Java, each live provider and each batch check distinct. A healthy pass plus the same test failing on a disclosed defect supports that demonstrated behavior. A missing output, timeout or provider outage does not. Prior v0.1 evidence cannot certify the v0.2 feature set.

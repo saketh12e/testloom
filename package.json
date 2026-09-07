@@ -1,9 +1,9 @@
 {
-  "name": "journeyproof",
-  "version": "0.1.0",
-  "description": "Turn browser journeys into reviewable, executable tests with Codex.",
+  "name": "testloom",
+  "version": "0.2.0",
+  "description": "Turn recorded browser journeys into editable test suites with Codex and Claude.",
   "license": "MIT",
-  "author": "JourneyProof contributors",
+  "author": "Testloom contributors",
   "main": "dist/main/index.cjs",
   "type": "module",
   "engines": {
@@ -14,12 +14,15 @@
     "start": "npm run build && electron .",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build",
     "browsers": "playwright install chromium",
     "package:mac": "npm run build && electron-builder --mac dir",
     "dist:mac": "npm run build && electron-builder --mac zip",
     "test:journey": "tsx tests/journey.integration.ts",
-    "test:desktop": "tsx tests/desktop.e2e.ts"
+    "test:desktop": "tsx tests/desktop.e2e.ts",
+    "test:suite": "tsx tests/suite.integration.ts",
+    "format": "prettier --write src tests scripts",
+    "format:check": "prettier --check src tests scripts"
   },
   "dependencies": {
     "playwright": "1.63.0"
@@ -29,13 +32,14 @@
     "electron": "44.2.0",
     "electron-builder": "^26.0.0",
     "esbuild": "^0.25.0",
+    "prettier": "3.9.6",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vite": "6.4.3"
   },
   "build": {
     "appId": "dev.journeyproof.app",
-    "productName": "JourneyProof",
+    "productName": "Testloom",
     "directories": {
       "output": "release"
     },
@@ -69,5 +73,9 @@
         ]
       }
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saketh12e/testloom.git"
   }
 }

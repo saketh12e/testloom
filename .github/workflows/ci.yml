@@ -30,6 +30,8 @@ jobs:
       - run: npm run check
       - name: Recorded journey and mutation verification
         run: npm run test:journey
+      - name: Positive, negative and boundary suite verification
+        run: npm run test:suite
       - name: Install cart test dependencies
         working-directory: examples/cart
         run: npm ci

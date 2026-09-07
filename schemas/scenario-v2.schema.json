@@ -1,0 +1,643 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Testloom Suite v2",
+  "description": "Portable editable case library containing v1 scenarios. The file importer caps input at 5,000,000 bytes; runtime structural validation caps serialized JSON at 5 MiB, enforces unique case/scenario IDs, validates URLs and strips screenshot paths. Schema validation alone does not establish runtime acceptance, replay support or verification. Runtime lengths use JavaScript string units.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "name",
+    "cases"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 120,
+      "allOf": [
+        {
+          "$ref": "#/$defs/plainText"
+        }
+      ],
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "cases": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "plainText": {
+      "type": "string",
+      "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "maxLength": 40,
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "description": "Runtime also checks calendar validity."
+    },
+    "url": {
+      "type": "string",
+      "maxLength": 8192,
+      "allOf": [
+        {
+          "$ref": "#/$defs/plainText"
+        }
+      ],
+      "minLength": 1,
+      "pattern": "^[hH][tT][tT][pP][sS]?://[^\\s\\\\]+$",
+      "description": "Runtime requires a valid HTTP(S) URL with a hostname, no embedded credentials, valid percent encoding and no recognizable secrets, including encoded secret keys."
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "maxLength": 2000,
+        "allOf": [
+          {
+            "$ref": "#/$defs/plainText"
+          }
+        ],
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy",
+        "value"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "testId",
+            "role",
+            "label",
+            "placeholder",
+            "text",
+            "css"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 2048,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ],
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 512,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "strategy": {
+                "enum": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "strategy"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "pattern": "^[a-z]+$",
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sequence",
+        "timestamp",
+        "action",
+        "url",
+        "pageId",
+        "label",
+        "locators"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "action": {
+          "enum": [
+            "navigate",
+            "click",
+            "fill",
+            "check",
+            "uncheck",
+            "select",
+            "press",
+            "popup",
+            "note"
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/url"
+            },
+            {
+              "const": ""
+            }
+          ]
+        },
+        "pageId": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 512,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ]
+        },
+        "locators": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/locator"
+          }
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 8192,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "screenshot": {
+          "type": "string",
+          "maxLength": 4096,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ],
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Optional local evidence reference; validated then discarded on suite import and omitted on suite export. It is never read as an imported file path."
+        },
+        "frameSelectors": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 2048,
+            "allOf": [
+              {
+                "$ref": "#/$defs/plainText"
+              }
+            ],
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "warnings": {
+          "$ref": "#/$defs/warnings"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "navigate",
+                  "click",
+                  "fill",
+                  "check",
+                  "uncheck",
+                  "select",
+                  "press"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "$ref": "#/$defs/url"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "click",
+                  "fill",
+                  "check",
+                  "uncheck",
+                  "select",
+                  "press"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "properties": {
+              "locators": {
+                "minItems": 1,
+                "type": "array"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "fill",
+                  "select",
+                  "press"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "press"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "maxLength": 128,
+                "pattern": "^(?:(?:Control|Alt|Meta|Shift)\\+)*(?:[A-Za-z0-9]|F(?:[1-9]|1[0-2])|Enter|Tab|Escape|Space|Backspace|Delete|Insert|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown)$",
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "description",
+        "kind",
+        "expected",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ],
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "visible",
+            "url",
+            "custom"
+          ]
+        },
+        "locator": {
+          "$ref": "#/$defs/locator"
+        },
+        "expected": {
+          "type": "string",
+          "maxLength": 8192,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ]
+        },
+        "source": {
+          "const": "user"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "text",
+                  "visible"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "locator"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "url"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "$ref": "#/$defs/url"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "custom"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "type": "string",
+                "maxLength": 8192,
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/plainText"
+                  }
+                ],
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "networkEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "url",
+        "status"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Z]+$"
+        },
+        "url": {
+          "$ref": "#/$defs/url"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "id",
+        "name",
+        "startUrl",
+        "createdAt",
+        "events",
+        "assertions",
+        "warnings",
+        "network"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ],
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "startUrl": {
+          "$ref": "#/$defs/url"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/event"
+          }
+        },
+        "assertions": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "warnings": {
+          "$ref": "#/$defs/warnings"
+        },
+        "network": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "$ref": "#/$defs/networkEntry"
+          }
+        }
+      },
+      "description": "Editable v1 scenario. Runtime requires unique event/assertion IDs and strictly increasing event sequences. Empty events/assertions are valid drafts, but generation requires both and adds semantic checks."
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "priority",
+        "tags",
+        "enabled",
+        "recordingId",
+        "scenario",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "allOf": [
+            {
+              "$ref": "#/$defs/plainText"
+            }
+          ],
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "kind": {
+          "enum": [
+            "positive",
+            "negative",
+            "boundary"
+          ],
+          "description": "Classification only. Expected rejection passes through explicit assertions; this field never inverts runner status."
+        },
+        "priority": {
+          "enum": [
+            "critical",
+            "high",
+            "normal",
+            "low"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "maxLength": 40,
+            "allOf": [
+              {
+                "$ref": "#/$defs/plainText"
+              }
+            ],
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "recordingId": {
+          "$ref": "#/$defs/id",
+          "description": "Original recording reference; multiple cases can share it. Raw recording files are not embedded in the suite."
+        },
+        "scenario": {
+          "$ref": "#/$defs/scenario"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 2,
+  "name": "Testloom suite",
+  "cases": [
+    {
+      "id": "sample-positive",
+      "name": "Valid coupon reduces the total",
+      "kind": "positive",
+      "priority": "high",
+      "tags": [
+        "sample",
+        "cart",
+        "coupon"
+      ],
+      "enabled": true,
+      "recordingId": "sample-positive-fixture",
+      "scenario": {
+        "schemaVersion": 1,
+        "id": "sample-positive",
+        "name": "Valid coupon reduces the total",
+        "startUrl": "http://127.0.0.1:4318/",
+        "createdAt": "2026-09-07T00:00:00Z",
+        "events": [
+          {
+            "id": "sample-positive-event-1",
+            "sequence": 1,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "navigate",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Open the sample cart",
+            "locators": []
+          },
+          {
+            "id": "sample-positive-event-2",
+            "sequence": 2,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add field notebook",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-notebook"
+              }
+            ]
+          },
+          {
+            "id": "sample-positive-event-3",
+            "sequence": 3,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add canvas bag",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-bag"
+              }
+            ]
+          },
+          {
+            "id": "sample-positive-event-4",
+            "sequence": 4,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "fill",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Enter coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "coupon"
+              }
+            ],
+            "value": "SAVE10"
+          },
+          {
+            "id": "sample-positive-event-5",
+            "sequence": 5,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Apply coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "apply-coupon"
+              }
+            ]
+          }
+        ],
+        "assertions": [
+          {
+            "id": "sample-positive-total",
+            "description": "The total must be $90.00.",
+            "kind": "text",
+            "locator": {
+              "strategy": "testId",
+              "value": "total"
+            },
+            "expected": "$90.00",
+            "source": "user"
+          }
+        ],
+        "warnings": [],
+        "network": []
+      },
+      "updatedAt": "2026-09-07T00:00:00Z"
+    },
+    {
+      "id": "sample-negative",
+      "name": "Invalid coupon is rejected",
+      "kind": "negative",
+      "priority": "high",
+      "tags": [
+        "sample",
+        "cart",
+        "coupon"
+      ],
+      "enabled": true,
+      "recordingId": "sample-negative-fixture",
+      "scenario": {
+        "schemaVersion": 1,
+        "id": "sample-negative",
+        "name": "Invalid coupon is rejected",
+        "startUrl": "http://127.0.0.1:4318/",
+        "createdAt": "2026-09-07T00:00:00Z",
+        "events": [
+          {
+            "id": "sample-negative-event-1",
+            "sequence": 1,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "navigate",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Open the sample cart",
+            "locators": []
+          },
+          {
+            "id": "sample-negative-event-2",
+            "sequence": 2,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add field notebook",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-notebook"
+              }
+            ]
+          },
+          {
+            "id": "sample-negative-event-3",
+            "sequence": 3,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add canvas bag",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-bag"
+              }
+            ]
+          },
+          {
+            "id": "sample-negative-event-4",
+            "sequence": 4,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "fill",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Enter coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "coupon"
+              }
+            ],
+            "value": "INVALID"
+          },
+          {
+            "id": "sample-negative-event-5",
+            "sequence": 5,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Apply coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "apply-coupon"
+              }
+            ]
+          }
+        ],
+        "assertions": [
+          {
+            "id": "sample-negative-total",
+            "description": "The total must be $100.00.",
+            "kind": "text",
+            "locator": {
+              "strategy": "testId",
+              "value": "total"
+            },
+            "expected": "$100.00",
+            "source": "user"
+          },
+          {
+            "id": "sample-negative-rejection",
+            "description": "Explain why the coupon was rejected.",
+            "kind": "text",
+            "locator": {
+              "strategy": "testId",
+              "value": "coupon-error"
+            },
+            "expected": "Coupon INVALID is invalid. No discount applied.",
+            "source": "user"
+          }
+        ],
+        "warnings": [],
+        "network": []
+      },
+      "updatedAt": "2026-09-07T00:00:00Z"
+    },
+    {
+      "id": "sample-boundary",
+      "name": "Empty coupon keeps the full total",
+      "kind": "boundary",
+      "priority": "high",
+      "tags": [
+        "sample",
+        "cart",
+        "coupon"
+      ],
+      "enabled": true,
+      "recordingId": "sample-boundary-fixture",
+      "scenario": {
+        "schemaVersion": 1,
+        "id": "sample-boundary",
+        "name": "Empty coupon keeps the full total",
+        "startUrl": "http://127.0.0.1:4318/",
+        "createdAt": "2026-09-07T00:00:00Z",
+        "events": [
+          {
+            "id": "sample-boundary-event-1",
+            "sequence": 1,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "navigate",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Open the sample cart",
+            "locators": []
+          },
+          {
+            "id": "sample-boundary-event-2",
+            "sequence": 2,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add field notebook",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-notebook"
+              }
+            ]
+          },
+          {
+            "id": "sample-boundary-event-3",
+            "sequence": 3,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Add canvas bag",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "add-bag"
+              }
+            ]
+          },
+          {
+            "id": "sample-boundary-event-4",
+            "sequence": 4,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "fill",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Enter coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "coupon"
+              }
+            ],
+            "value": ""
+          },
+          {
+            "id": "sample-boundary-event-5",
+            "sequence": 5,
+            "timestamp": "2026-09-07T00:00:00Z",
+            "action": "click",
+            "url": "http://127.0.0.1:4318/",
+            "pageId": "page-1",
+            "label": "Apply coupon",
+            "locators": [
+              {
+                "strategy": "testId",
+                "value": "apply-coupon"
+              }
+            ]
+          }
+        ],
+        "assertions": [
+          {
+            "id": "sample-boundary-total",
+            "description": "The total must be $100.00.",
+            "kind": "text",
+            "locator": {
+              "strategy": "testId",
+              "value": "total"
+            },
+            "expected": "$100.00",
+            "source": "user"
+          },
+          {
+            "id": "sample-boundary-rejection",
+            "description": "Explain why the coupon was rejected.",
+            "kind": "text",
+            "locator": {
+              "strategy": "testId",
+              "value": "coupon-error"
+            },
+            "expected": "Enter a coupon code. No discount applied.",
+            "source": "user"
+          }
+        ],
+        "warnings": [],
+        "network": []
+      },
+      "updatedAt": "2026-09-07T00:00:00Z"
+    }
+  ]
+}

@@ -4,65 +4,784 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" />
-    <title>JourneyProof</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+    />
+    <title>Testloom</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <svg class="svg-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="loom" viewBox="0 0 40 40">
+          <path
+            d="M9 9h13c6 0 9 4 9 10v12M9 20h22M9 31h13M20 9v22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M9 9v22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="4"
+            stroke-linecap="round"
+            opacity=".45"
+          />
+        </symbol>
+        <symbol id="grid" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="6" height="6" rx="1.5" />
+          <rect x="14" y="4" width="6" height="6" rx="1.5" />
+          <rect x="4" y="14" width="6" height="6" rx="1.5" />
+          <rect x="14" y="14" width="6" height="6" rx="1.5" />
+        </symbol>
+        <symbol id="document" viewBox="0 0 24 24">
+          <path
+            d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"
+          />
+        </symbol>
+        <symbol id="result" viewBox="0 0 24 24">
+          <path d="M4 5v14h16M8 13l4-4 4 3 5-7" />
+        </symbol>
+        <symbol id="settings" viewBox="0 0 24 24">
+          <path d="M4 7h16M4 17h16" />
+          <circle cx="9" cy="7" r="3" />
+          <circle cx="15" cy="17" r="3" />
+        </symbol>
+        <symbol id="folder" viewBox="0 0 24 24">
+          <path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </symbol>
+        <symbol id="search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 4 4" />
+        </symbol>
+        <symbol id="shield" viewBox="0 0 24 24">
+          <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6" />
+        </symbol>
+        <symbol id="plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+      </defs>
+    </svg>
     <div class="desktop">
-      <header class="titlebar"><span class="titlebar-label">JourneyProof</span><span class="titlebar-detail">A local testing studio</span></header>
-      <aside class="rail" aria-label="Project and scenario">
-        <a class="brand" href="#" id="home-link" aria-label="JourneyProof home"><span class="brand-mark" aria-hidden="true">j<span>p</span><i></i></span><span>Journey<span class="brand-light">Proof</span></span></a>
-        <div class="rail-section-label">WORKSPACE</div>
-        <button class="project-card" id="rail-project" title="Open a project folder"><span class="folder-icon" aria-hidden="true">▱</span><span><strong id="project-name">No project open</strong><small id="project-framework">Choose a local repository</small></span><span class="project-chevron" aria-hidden="true">⌄</span></button>
-        <p class="project-path" id="project-path"></p>
-        <details class="project-context" id="project-context" hidden><summary>Project context <span id="context-count">0 files</span></summary><ul id="context-paths" aria-label="Selected source context paths"></ul><p id="context-empty" hidden>No source excerpts selected.</p></details>
-        <div class="rail-section-label scenario-label">SCENARIOS <span id="scenario-count">—</span></div>
-        <button class="scenario-card" id="scenario-nav" disabled><span class="scenario-icon" aria-hidden="true">↳</span><span id="scenario-nav-name">Your first journey</span><span class="tiny-dot" id="scenario-dot" hidden></span></button>
-        <p class="rail-hint" id="rail-hint">The best tests begin with a real interaction.</p>
-        <div class="rail-bottom"><div class="local-stamp"><span class="local-icon" aria-hidden="true">⌘</span><span>Rooted in your repo<small>Recorded locally. Yours to keep.</small></span></div><button class="text-button rail-reveal" id="rail-reveal" disabled>Show workspace <span aria-hidden="true">↗</span></button><div class="rail-version">JOURNEYPROOF <span>STUDIO / 01</span></div></div>
+      <header class="titlebar">
+        <span>Testloom</span><span class="titlebar-caption">Record once. Test every outcome.</span>
+      </header>
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <a class="brand" id="home-link" href="#" aria-label="Testloom home"
+          ><span class="brand-mark"
+            ><svg aria-hidden="true"><use href="#loom" /></svg></span
+          ><span>Testloom<span class="brand-caption">A little more certainty.</span></span></a
+        >
+        <span class="section-label">WORKSPACE</span>
+        <button class="project-switch" id="rail-project" data-mutation disabled>
+          <svg class="icon" aria-hidden="true"><use href="#folder" /></svg
+          ><span
+            ><strong id="project-name">Open a project</strong
+            ><small id="project-framework">Choose a local folder</small></span
+          ><span aria-hidden="true">⌄</span>
+        </button>
+        <nav class="main-nav" aria-label="Main">
+          <button id="nav-cases" class="nav-item" data-page="cases" aria-current="page">
+            <svg class="icon" aria-hidden="true"><use href="#grid" /></svg><span>Cases</span
+            ><span class="nav-count" id="case-count">0</span>
+          </button>
+          <button id="nav-editor" class="nav-item" data-page="editor" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#document" /></svg
+            ><span id="nav-case-name">Active case</span
+            ><span class="unsaved-dot" id="nav-dirty" hidden aria-label="Unsaved changes"></span>
+          </button>
+          <button id="nav-results" class="nav-item" data-page="results">
+            <svg class="icon" aria-hidden="true"><use href="#result" /></svg><span>Results</span
+            ><span class="result-dot" id="result-dot" hidden></span>
+          </button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="mini-loom" aria-hidden="true">↳</span>
+          <p>One recording.<br />Room for every possibility.</p>
+        </div>
+        <div class="sidebar-bottom">
+          <button id="open-settings" class="agent-button" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true"><use href="#settings" /></svg
+            ><span>Agent settings<small id="agent-label">Codex · default</small></span
+            ><span aria-hidden="true">↗</span>
+          </button>
+          <div class="local-status">
+            <span id="connection-dot" class="dot"></span
+            ><span id="connection-state">Connecting…</span><span class="shortcut">⌘ ,</span>
+          </div>
+        </div>
       </aside>
       <div class="studio">
-        <nav class="workflow" aria-label="Journey workflow"><ol>
-          <li><button data-step="0" aria-current="step"><span class="step-number">01</span><span>Connect</span></button></li>
-          <li><button data-step="1" disabled><span class="step-number">02</span><span>Record</span></button></li>
-          <li><button data-step="2" disabled><span class="step-number">03</span><span>Define</span></button></li>
-          <li><button data-step="3" disabled><span class="step-number">04</span><span>Generate</span></button></li>
-          <li><button data-step="4" disabled><span class="step-number">05</span><span>Verify & export</span></button></li>
-        </ol><span class="connection-state" id="connection-state"><span></span>Connecting</span></nav>
-        <div class="error-banner" id="error-banner" role="alert" hidden><span class="error-symbol" aria-hidden="true">!</span><div><strong id="error-heading">Something needs attention</strong><p id="error-message"></p><small id="error-help"></small></div><button class="text-button" id="retry-button" hidden>Retry</button><button class="icon-button" id="dismiss-error" aria-label="Dismiss error">×</button></div>
-        <div class="workspace">
-          <main class="canvas" id="main-content">
-            <section class="welcome" id="welcome" aria-labelledby="welcome-heading">
-              <div class="eyebrow"><span class="accent-line"></span>FROM INTERACTION TO EVIDENCE</div>
-              <h1 id="welcome-heading">Show the journey.<br><em>Prove the outcome.</em></h1>
-              <p class="hero-description">Walk through your app. Tell us what matters.<br>Turn the journey into a test you can trust.</p>
-              <div class="hero-actions"><button class="button primary" id="open-project" disabled><span aria-hidden="true">＋</span> Open project folder</button><button class="button secondary" id="load-demo" disabled>Try the cart demo <span aria-hidden="true">↗</span></button></div>
-              <p class="hero-footnote">Start with a local repository, or explore a small cart demo.</p>
-              <div class="journey-diagram" aria-label="Record interactions, define expectations, collect evidence"><div class="diagram-route" aria-hidden="true"><span class="route-node route-start"></span><span class="route-line"></span><span class="route-node route-middle"></span><span class="route-line"></span><span class="route-node route-end"></span></div><div class="diagram-labels"><span><b>01 / INTERACTION</b>What you do</span><span><b>02 / INTENTION</b>What should happen</span><span><b>03 / EVIDENCE</b>What actually happens</span></div></div>
-              <div class="welcome-note"><span aria-hidden="true">↳</span><p>Your repository sets the conventions.<br><strong>Your assertions define success.</strong></p></div>
-            </section>
-            <section id="journey-section" hidden>
-              <div class="section-heading"><div><div class="eyebrow">THE WORKING JOURNEY</div><h1 id="journey-title">A new journey</h1></div><span class="status-chip" id="phase-chip">Ready to record</span></div>
-              <form id="record-form" class="record-form"><div class="field"><label for="scenario-name">Scenario name</label><input id="scenario-name" name="name" placeholder="e.g. Apply a cart discount" required maxlength="120" autocomplete="off" /></div><div class="field"><label for="start-url">Starting URL</label><input id="start-url" name="url" type="url" placeholder="http://localhost:3000" required spellcheck="false" autocomplete="off" /></div><div class="record-toolbar"><label class="checkbox-label"><input type="checkbox" id="capture-screenshots" aria-describedby="screenshot-help" title="Images are masked but may still contain visible personal data. Review before exporting." /> Capture screenshots <span class="optional">optional</span></label><button class="button primary" id="start-recording" type="submit"><span class="record-dot" aria-hidden="true"></span>Start recording</button><button class="button danger" id="stop-recording" type="button" hidden><span aria-hidden="true">■</span>Stop recording</button></div><p class="field-hint screenshot-help" id="screenshot-help" hidden>Images are masked but may still contain visible personal data. Review before exporting.</p><p class="field-hint" id="record-hint">A browser opens for your journey. Interactions appear here as you go.</p></form>
-              <div class="content-tabs" role="tablist" aria-label="Journey details"><button id="tab-ledger" role="tab" aria-selected="true" aria-controls="panel-ledger" data-tab="ledger">Event ledger <span id="event-count">0</span></button><button id="tab-generated" role="tab" aria-selected="false" aria-controls="panel-generated" data-tab="generated" tabindex="-1" disabled>Generated files <span id="file-count">0</span></button><button id="tab-verification" role="tab" aria-selected="false" aria-controls="panel-verification" data-tab="verification" tabindex="-1" disabled>Verification</button></div>
-              <section class="tab-panel" id="panel-ledger" role="tabpanel" aria-labelledby="tab-ledger"><div class="ledger-heading"><span>THE SEQUENCE</span><span id="ledger-meta">Waiting for your first interaction</span></div><div class="ledger-empty" id="ledger-empty"><span class="empty-ledger-icon" aria-hidden="true">↳</span><h2>Every journey starts somewhere.</h2><p>Start recording, then interact with your app.<br>Your steps will build a readable trail here.</p></div><ol class="event-ledger" id="event-ledger"></ol><div class="warning-list" id="scenario-warnings" hidden></div></section>
-              <section class="tab-panel" id="panel-generated" role="tabpanel" aria-labelledby="tab-generated" hidden><div class="result-header"><h2>The journey, translated.</h2><p id="generation-summary"></p></div><div class="isolation-note"><span aria-hidden="true">◇</span><div><strong>Generated in an isolated workspace</strong><p>Your original repository is kept separate. Review the files before exporting.</p><code id="generation-workspace"></code></div></div><div class="warning-list" id="generation-warnings" hidden></div><div class="code-browser"><div class="file-list" id="file-list" aria-label="Generated files"></div><div class="code-header"><span id="code-path">Select a generated file</span><button class="text-button" id="copy-code" disabled>Copy</button></div><pre class="code-content" tabindex="0" aria-label="Generated file content"><code id="code-content"></code></pre></div></section>
-              <section class="tab-panel" id="panel-verification" role="tabpanel" aria-labelledby="tab-verification" hidden><div class="result-header"><h2>Evidence, with the details.</h2><p id="verification-statement">Run the generated test to collect evidence.</p></div><div class="verification-summary" id="verification-summary"></div><div id="verification-runs"></div><div class="export-card"><div><strong>A reviewable handoff.</strong><p>Export the journey, generated files, and available evidence.</p></div><div class="export-actions"><button class="button primary" id="export-bundle" disabled>Export bundle <span aria-hidden="true">↗</span></button><button class="button secondary" id="reveal-workspace" disabled>Reveal workspace</button></div><p id="export-result" class="export-result" role="status" hidden></p></div></section>
-            </section>
-          </main>
-          <aside class="inspector" aria-label="Intent, generation, and verification">
-            <div class="inspector-header"><span class="eyebrow">THE INTENT</span><span class="inspector-symbol" aria-hidden="true">↗</span><h2>What should be true?</h2><p>A recording captures actions.<br>Your assertions give them meaning.</p></div>
-            <div class="inspector-scroll">
-              <section class="assertions-section" id="assertions-section"><div class="panel-label"><h3>Assertions</h3><span id="assertion-count">0</span></div><div class="assertions-empty" id="assertions-empty"><span aria-hidden="true">＋</span><p>Define the outcome you expect.<br>A visible message. An exact total.<br>The right destination.</p></div><div id="assertion-list"></div><button class="button add-button" id="add-assertion" disabled><span aria-hidden="true">＋</span>Add assertion</button><div class="demo-tip"><span class="tip-label">TRY IT IN THE DEMO</span><p>Expect the cart total to be <code>$90.00</code>.</p><p>Kind <b>Text</b> · locator <b>Test ID</b> · value <code>total</code></p></div><div class="save-row"><span id="save-status">Record a journey to define assertions.</span><button class="text-button" id="save-scenario" disabled>Save</button></div></section>
-              <section class="inspector-section" id="generation-section"><div class="panel-label"><h3>Generate the test</h3><span class="section-index">04</span></div><div class="field"><label for="generator-mode">Generator</label><select id="generator-mode"><option value="codex">Codex</option><option value="portable">Portable generator · fallback</option></select></div><p class="field-hint" id="codex-status">Checking Codex availability…</p><div class="field" id="model-field"><label for="model-name">Model <span class="optional">optional</span></label><input id="model-name" placeholder="Use Codex default" autocomplete="off" spellcheck="false" /></div><button class="button primary full-width" id="generate" aria-describedby="generation-privacy" disabled>Generate test <span aria-hidden="true">↗</span></button><p class="field-hint">Your name and assertions are saved before generation.</p><p class="field-hint privacy-note" id="generation-privacy">Codex receives the scenario and selected source excerpts through your Codex configuration. Screenshots stay on this Mac.</p></section>
-              <section class="inspector-section" id="verify-section"><div class="panel-label"><h3>Verify the outcome</h3><span class="section-index">05</span></div><div class="field"><label for="test-command">Test command</label><select id="test-command"><option value="custom">Custom executable…</option></select></div><p id="command-preview" class="command-preview"></p><div id="custom-command"><div class="field"><label for="command-executable">Executable</label><input id="command-executable" placeholder="e.g. npm" autocomplete="off" spellcheck="false" /></div><div class="field"><label for="command-args">Arguments</label><input id="command-args" placeholder="e.g. run test -- --reporter=line" autocomplete="off" spellcheck="false" /><p class="field-hint">Space-separated arguments; use quotes for values with spaces.</p></div><details id="advanced-args"><summary>Advanced: exact arguments</summary><label class="checkbox-label"><input id="use-json-args" type="checkbox" /> Use JSON argument array</label><label class="sr-only" for="json-args">Arguments as a JSON array of strings</label><textarea id="json-args" rows="3" placeholder='["run", "test"]' spellcheck="false"></textarea><p class="field-hint">An array of strings. No shell expansion.</p></details></div><div class="field repeat-field"><label for="verify-repeats">Repeat runs</label><select id="verify-repeats"><option value="1">1 run</option><option value="2" selected>2 runs</option><option value="3">3 runs</option></select></div><p class="execution-note"><span aria-hidden="true">◇</span>This command executes in the isolated copy of your repository.</p><button class="button secondary full-width" id="verify" disabled>Run verification <span aria-hidden="true">→</span></button></section>
-            </div>
-          </aside>
+        <header class="toolbar">
+          <div class="breadcrumb">
+            <span id="breadcrumb-project">Your workspace</span><span aria-hidden="true">/</span
+            ><strong id="breadcrumb-page">Cases</strong>
+          </div>
+          <div class="toolbar-actions">
+            <span id="phase-chip" class="phase-chip" hidden></span
+            ><button id="record-button" class="button primary" data-mutation disabled>
+              <span class="record-dot" aria-hidden="true"></span>Record a case</button
+            ><button id="stop-recording" class="button danger" hidden>
+              <span class="stop-square" aria-hidden="true"></span>Stop recording
+            </button>
+          </div>
+        </header>
+        <div class="error-banner" id="error-banner" role="alert" hidden>
+          <div>
+            <strong id="error-heading">Something needs attention</strong>
+            <p id="error-message"></p>
+          </div>
+          <button id="dismiss-error" class="icon-button" aria-label="Dismiss error">×</button>
         </div>
-        <footer class="activity"><div class="activity-bar"><button class="activity-toggle" id="activity-toggle" aria-expanded="false" aria-controls="activity-log"><span class="activity-indicator" id="activity-indicator"></span><strong>Activity</strong><span id="activity-current" role="status" aria-live="polite">Connecting to the local workspace…</span><span class="activity-chevron" aria-hidden="true">⌃</span></button><button class="text-button cancel-button" id="cancel-run" hidden>Cancel run</button><span class="activity-private">LOCAL WORKSPACE</span></div><div class="activity-log" id="activity-log" role="log" aria-label="Activity log" hidden></div></footer>
+        <main class="main-content" id="main-content">
+          <section id="page-cases" aria-labelledby="cases-heading">
+            <div id="welcome" class="welcome" hidden>
+              <div class="welcome-copy">
+                <p class="eyebrow">FROM REAL INTERACTIONS TO RELIABLE TESTS</p>
+                <h1 id="welcome-heading">Record once.<br /><span>Test every outcome.</span></h1>
+                <p class="lead">
+                  Capture what you do. Define what should happen.<br />Turn one flow into a
+                  thoughtful test suite.
+                </p>
+                <div class="button-row">
+                  <button id="open-project" class="button primary" data-mutation disabled>
+                    Open project folder
+                    <span aria-hidden="true">↗</span></button
+                  ><button id="load-demo" class="button" data-mutation disabled>
+                    Try the cart demo
+                  </button>
+                </div>
+                <p class="protection">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#shield" /></svg
+                  >Tests are created in a separate copy.
+                </p>
+              </div>
+              <div class="welcome-art" aria-hidden="true">
+                <svg viewBox="0 0 300 330">
+                  <defs>
+                    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse">
+                      <circle cx="1" cy="1" r="1" fill="#ced5cd" />
+                    </pattern>
+                  </defs>
+                  <rect width="300" height="330" fill="url(#dots)" />
+                  <path
+                    d="M54 76h87c56 0 72 35 72 86v92M54 164h192M54 254h87M141 76v178"
+                    fill="none"
+                    stroke="#276b5d"
+                    stroke-width="22"
+                    stroke-linecap="round"
+                  />
+                  <path d="M54 76v178" stroke="#a7b9a2" stroke-width="22" stroke-linecap="round" />
+                  <circle cx="246" cy="164" r="19" fill="#f8f9f5" />
+                  <circle cx="246" cy="164" r="9" fill="#d49a57" /></svg
+                ><span class="art-label">A good flow is just the beginning.</span>
+              </div>
+            </div>
+            <div id="library" hidden>
+              <div class="page-heading">
+                <div>
+                  <p class="eyebrow">YOUR TEST LIBRARY</p>
+                  <h1 id="cases-heading">Cases</h1>
+                  <p class="muted">Same flow. Different possibilities.</p>
+                </div>
+                <div class="button-row">
+                  <button id="import-suite" class="button small" data-mutation>Import suite</button
+                  ><button id="export-suite" class="button small" data-mutation>
+                    Export suite
+                  </button>
+                </div>
+              </div>
+              <div class="stats-grid" aria-label="Case counts">
+                <div class="stat">
+                  <span class="kind-dot positive"></span><span>Positive</span
+                  ><strong id="positive-count">0</strong><small>The expected path</small>
+                </div>
+                <div class="stat">
+                  <span class="kind-dot negative"></span><span>Negative</span
+                  ><strong id="negative-count">0</strong><small>Graceful rejection</small>
+                </div>
+                <div class="stat">
+                  <span class="kind-dot boundary"></span><span>Boundary</span
+                  ><strong id="boundary-count">0</strong><small>Right at the edge</small>
+                </div>
+              </div>
+              <div class="library-tools">
+                <div class="segmented" role="group" aria-label="Filter cases by type">
+                  <button data-filter="all" aria-pressed="true">
+                    All <span id="all-count">0</span></button
+                  ><button data-filter="positive" aria-pressed="false">Positive</button
+                  ><button data-filter="negative" aria-pressed="false">Negative</button
+                  ><button data-filter="boundary" aria-pressed="false">Boundary</button>
+                </div>
+                <label class="search-field"
+                  ><svg class="icon" aria-hidden="true">
+                    <use href="#search" /></svg
+                  ><input
+                    id="case-search"
+                    type="search"
+                    placeholder="Search cases or tags"
+                    aria-label="Search cases or tags"
+                    autocomplete="off"
+                /></label>
+              </div>
+              <div class="case-table">
+                <div class="table-heading">
+                  <label class="select-all"
+                    ><input
+                      id="select-all-cases"
+                      type="checkbox"
+                      aria-label="Select up to 20 visible enabled cases"
+                    /><span>TEST CASE</span></label
+                  ><span>TYPE</span><span>PRIORITY</span><span>STEPS</span>
+                </div>
+                <div id="case-list" role="list" aria-label="Test cases"></div>
+                <div id="library-empty" class="empty-state">
+                  <div class="empty-mark">
+                    <svg aria-hidden="true"><use href="#loom" /></svg>
+                  </div>
+                  <h2>Your first flow starts here.</h2>
+                  <p>
+                    Record a browser interaction, then shape it into<br />positive, negative, and
+                    boundary cases.
+                  </p>
+                  <button id="empty-record" class="button primary" data-mutation>
+                    Record your first case <span aria-hidden="true">↗</span>
+                  </button>
+                </div>
+                <div id="search-empty" class="empty-state compact" hidden>
+                  <h2>No matching cases</h2>
+                  <p>Try another name, tag, or case type.</p>
+                  <button id="clear-filters" class="button small">Clear filters</button>
+                </div>
+              </div>
+              <p class="library-footnote">
+                <span id="library-count">0 cases</span
+                ><span>Select up to 20 cases to generate together.</span>
+              </p>
+            </div>
+          </section>
+          <section id="page-editor" hidden aria-labelledby="editor-heading">
+            <div class="page-heading">
+              <div class="editor-title">
+                <p class="eyebrow">CASE EDITOR</p>
+                <h1 id="editor-heading">Untitled case</h1>
+                <div class="inline-meta" id="editor-meta">
+                  <span id="editor-kind" class="badge positive">Positive</span
+                  ><span id="save-status" role="status">All changes saved</span>
+                </div>
+              </div>
+              <div class="button-row">
+                <button id="discard-case" class="button small subtle" data-mutation hidden>
+                  Discard changes</button
+                ><button id="save-case" class="button small" data-mutation>Save changes</button>
+                <details class="menu" id="case-menu">
+                  <summary aria-label="Case actions">•••</summary>
+                  <div class="menu-popover">
+                    <span class="menu-label">DUPLICATE AS</span
+                    ><button data-duplicate="positive" data-mutation>Positive case</button
+                    ><button data-duplicate="negative" data-mutation>Negative case</button
+                    ><button data-duplicate="boundary" data-mutation>Boundary case</button>
+                    <hr />
+                    <button id="delete-case" class="text-danger" data-mutation>Delete case…</button>
+                  </div>
+                </details>
+              </div>
+            </div>
+            <div class="recording-notice" id="recording-notice" role="status" hidden>
+              <span class="record-dot"></span>
+              <div>
+                <strong>Recording your browser</strong>
+                <p>Use your app naturally. Stop recording when you’re ready to review.</p>
+              </div>
+              <span id="live-event-count">0 steps</span>
+            </div>
+            <div class="tabs" role="tablist" aria-label="Case editor">
+              <button
+                id="tab-steps"
+                data-editor-tab="steps"
+                role="tab"
+                aria-controls="panel-steps"
+                aria-selected="true"
+              >
+                Recorded steps <span id="event-count">0</span></button
+              ><button
+                id="tab-expectations"
+                data-editor-tab="expectations"
+                role="tab"
+                aria-controls="panel-expectations"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                Expectations <span id="assertion-count">0</span></button
+              ><button
+                id="tab-details"
+                data-editor-tab="details"
+                role="tab"
+                aria-controls="panel-details"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                Case details
+              </button>
+            </div>
+            <section id="panel-steps" role="tabpanel" aria-labelledby="tab-steps">
+              <div class="section-heading">
+                <div>
+                  <h2>The recorded flow</h2>
+                  <p class="muted">Open a step to refine its input or locator.</p>
+                </div>
+                <span class="tiny-label" id="recorded-url"></span>
+              </div>
+              <div id="event-ledger"></div>
+              <div id="steps-empty" class="empty-state compact">
+                <h2>Listening for your first step</h2>
+                <p>Your interactions will appear here as you record.</p>
+              </div>
+              <div id="scenario-warnings" class="warning-list" hidden></div>
+              <div class="next-section">
+                <p>A flow says what you do. Expectations say what should happen.</p>
+                <button id="review-expectations" class="text-button">
+                  Define expectations <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </section>
+            <section
+              id="panel-expectations"
+              role="tabpanel"
+              aria-labelledby="tab-expectations"
+              hidden
+            >
+              <div class="section-heading">
+                <div>
+                  <h2>What should happen?</h2>
+                  <p class="muted">These expectations determine whether this case passes.</p>
+                </div>
+                <button id="add-assertion" class="button small" data-mutation>
+                  + Add expectation
+                </button>
+              </div>
+              <p id="expectation-semantics" class="semantic-note"></p>
+              <div id="assertion-list"></div>
+              <div id="assertions-empty" class="empty-state compact">
+                <h2>Make the outcome explicit.</h2>
+                <p>Add expected text, a visible element, a URL, or a custom outcome.</p>
+                <button id="empty-assertion" class="button" data-mutation>
+                  Add an expectation
+                </button>
+              </div>
+            </section>
+            <section id="panel-details" role="tabpanel" aria-labelledby="tab-details" hidden>
+              <div class="section-heading">
+                <div>
+                  <h2>A case worth keeping</h2>
+                  <p class="muted">Name it clearly, then make it easy to find.</p>
+                </div>
+              </div>
+              <div class="details-form" id="case-details-form">
+                <label class="field"
+                  >Case name<input id="case-name" data-mutation maxlength="120" autocomplete="off"
+                /></label>
+                <div class="form-grid">
+                  <label class="field"
+                    >Case type<select id="case-kind" data-mutation>
+                      <option value="positive">Positive</option>
+                      <option value="negative">Negative</option>
+                      <option value="boundary">Boundary</option>
+                    </select></label
+                  ><label class="field"
+                    >Priority<select id="case-priority" data-mutation>
+                      <option value="critical">Critical</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select></label
+                  >
+                </div>
+                <label class="field"
+                  >Tags<input
+                    id="case-tags"
+                    data-mutation
+                    placeholder="checkout, regression, payments"
+                    autocomplete="off"
+                  /><small
+                    >Separate tags with commas. Up to 12 tags, 40 characters each.</small
+                  ></label
+                ><label class="toggle-row"
+                  ><span
+                    ><strong>Include this case</strong
+                    ><small
+                      >Disabled cases stay in your library and are excluded from generation.</small
+                    ></span
+                  ><input id="case-enabled" type="checkbox" data-mutation
+                /></label>
+              </div>
+            </section>
+          </section>
+          <section id="page-results" hidden aria-labelledby="results-heading">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">FROM INTENT TO EVIDENCE</p>
+                <h1 id="results-heading">Results</h1>
+                <p class="muted">Review the code. Check the outcome. Keep the proof.</p>
+              </div>
+              <button id="export-bundle" class="button" data-mutation disabled>
+                Export results <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <div class="tabs" role="tablist" aria-label="Results">
+              <button
+                id="tab-generated"
+                data-result-tab="generated"
+                role="tab"
+                aria-controls="panel-generated"
+                aria-selected="true"
+              >
+                Code <span id="file-count">0</span></button
+              ><button
+                id="tab-verification"
+                data-result-tab="verification"
+                role="tab"
+                aria-controls="panel-verification"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                Verification</button
+              ><button
+                id="tab-history"
+                data-result-tab="history"
+                role="tab"
+                aria-controls="panel-history"
+                aria-selected="false"
+                tabindex="-1"
+              >
+                History <span id="history-count">0</span>
+              </button>
+            </div>
+            <section id="panel-generated" role="tabpanel" aria-labelledby="tab-generated">
+              <div id="generation-empty" class="empty-state">
+                <div class="empty-mark">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#document" />
+                  </svg>
+                </div>
+                <h2>Your next test is taking shape.</h2>
+                <p>
+                  Select cases in your library or open a case,<br />then generate to review the code
+                  here.
+                </p>
+                <button id="results-to-cases" class="button">Go to cases →</button>
+              </div>
+              <div id="generation-content" hidden>
+                <div class="section-heading">
+                  <div>
+                    <h2>Generated test files</h2>
+                    <p id="generation-summary" class="muted"></p>
+                  </div>
+                  <span class="badge" id="generation-provider"></span>
+                </div>
+                <div id="generation-warnings" class="warning-list" hidden></div>
+                <div class="code-browser">
+                  <div id="file-list" class="file-list" aria-label="Generated files"></div>
+                  <div class="code-header">
+                    <span id="code-path"></span
+                    ><button id="copy-code" class="text-button">Copy code</button>
+                  </div>
+                  <pre
+                    id="code-content"
+                    class="code-content"
+                    tabindex="0"
+                    aria-label="Generated code"
+                  ></pre>
+                </div>
+                <div class="next-section">
+                  <p class="protection">
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#shield" /></svg
+                    >Tests are created in a separate copy.
+                  </p>
+                  <button id="reveal-workspace" class="text-button" data-mutation>
+                    Show in Finder ↗
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section
+              id="panel-verification"
+              role="tabpanel"
+              aria-labelledby="tab-verification"
+              hidden
+            >
+              <div class="section-heading">
+                <div>
+                  <h2>Put it to the test</h2>
+                  <p class="muted">Project commands run with your Mac permissions.</p>
+                </div>
+              </div>
+              <div class="verify-controls">
+                <label class="field"
+                  >Test command<select id="test-command" data-mutation></select></label
+                ><label class="field repeat-field"
+                  >Runs<select id="verify-repeats" data-mutation>
+                    <option value="1">1 run</option>
+                    <option value="2" selected>2 runs</option>
+                    <option value="3">3 runs</option>
+                  </select></label
+                ><button id="verify" class="button primary" data-mutation disabled>
+                  Run verification →
+                </button>
+              </div>
+              <div id="custom-command" class="form-grid" hidden>
+                <label class="field"
+                  >Executable<input
+                    id="command-executable"
+                    data-mutation
+                    placeholder="npm"
+                    autocomplete="off" /></label
+                ><label class="field"
+                  >Arguments (JSON array)<input
+                    id="command-args"
+                    data-mutation
+                    value='["test"]'
+                    placeholder='["run", "test"]'
+                    autocomplete="off"
+                  /><small>Each argument is a separate string.</small></label
+                >
+              </div>
+              <p id="verification-statement" class="semantic-note">
+                No verification yet. Generate a test, then run it here.
+              </p>
+              <div id="verification-summary" class="verification-summary"></div>
+              <div id="verification-runs"></div>
+            </section>
+            <section id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+              <div class="section-heading">
+                <div>
+                  <h2>A record of your runs</h2>
+                  <p class="muted">Generation and verification, in one place.</p>
+                </div>
+              </div>
+              <div id="history-list"></div>
+              <div id="history-empty" class="empty-state compact">
+                <h2>A fresh start.</h2>
+                <p>Your generation runs will appear here.</p>
+              </div>
+            </section>
+            <p id="export-result" class="export-result" role="status" hidden></p>
+          </section>
+        </main>
+        <footer class="actionbar">
+          <div class="actionbar-info">
+            <span id="activity-indicator" class="dot"></span>
+            <div>
+              <strong id="footer-title">Ready when you are.</strong
+              ><span id="footer-detail">Tests are created in a separate copy.</span>
+            </div>
+            <button id="clear-selection" class="text-button" hidden>Clear</button>
+          </div>
+          <div class="button-row">
+            <button
+              id="activity-toggle"
+              class="icon-button activity-toggle"
+              aria-label="Show activity"
+              aria-expanded="false"
+              aria-controls="activity-panel"
+            >
+              ≡</button
+            ><button id="cancel-run" class="button small" hidden>Cancel run</button
+            ><button id="generate" class="button primary" data-mutation hidden>
+              Generate test <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </footer>
+        <section id="activity-panel" class="activity-panel" aria-label="Activity" hidden>
+          <div class="section-heading">
+            <h2>Activity</h2>
+            <button id="close-activity" class="icon-button" aria-label="Close activity">×</button>
+          </div>
+          <div id="activity-log" role="log" aria-live="off"></div>
+        </section>
       </div>
     </div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <dialog id="record-dialog" class="modal" aria-labelledby="record-heading">
+      <form id="record-form">
+        <div class="dialog-header">
+          <span class="eyebrow">A NEW POSSIBILITY</span
+          ><button
+            id="close-record"
+            class="icon-button"
+            type="button"
+            aria-label="Close recording dialog"
+          >
+            ×
+          </button>
+        </div>
+        <h2 id="record-heading">Start with a real interaction.</h2>
+        <p class="muted">We’ll open a browser and follow your steps.</p>
+        <label class="field"
+          >Case name<input
+            id="record-name"
+            required
+            maxlength="120"
+            placeholder="e.g. Checkout with a valid coupon"
+            autocomplete="off"
+            data-mutation /></label
+        ><label class="field"
+          >Starting URL<input
+            id="start-url"
+            type="url"
+            required
+            placeholder="http://localhost:3000"
+            autocomplete="url"
+            data-mutation /></label
+        ><label class="toggle-row"
+          ><span
+            ><strong>Capture screenshots</strong
+            ><small>Save a visual reference with each step.</small></span
+          ><input id="capture-screenshots" type="checkbox" data-mutation
+        /></label>
+        <p id="screenshot-help" class="field-hint" hidden>
+          Screenshots may include information visible on the page.
+        </p>
+        <p id="record-error" class="inline-error" role="alert" hidden></p>
+        <div class="dialog-footer">
+          <button id="cancel-record" class="button" type="button">Cancel</button
+          ><button id="start-recording" class="button primary" type="submit" data-mutation>
+            <span class="record-dot"></span>Start recording
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="settings-dialog" class="settings-drawer" aria-labelledby="settings-heading">
+      <div class="drawer-header">
+        <div>
+          <p class="eyebrow">MAKE IT YOURS</p>
+          <h2 id="settings-heading">Agent settings</h2>
+        </div>
+        <button id="close-settings" class="icon-button" aria-label="Close agent settings">×</button>
+      </div>
+      <div class="drawer-body">
+        <p class="muted">Choose how your cases become tests.</p>
+        <div class="field">
+          <label for="generator-mode">Generator</label
+          ><select id="generator-mode" data-mutation>
+            <option value="codex">Codex · default</option>
+            <option value="claude">Claude</option>
+            <option value="portable">Portable · no agent required</option>
+          </select>
+        </div>
+        <div class="availability-row">
+          <span id="agent-status" role="status"></span
+          ><button id="refresh-agents" class="text-button" data-mutation>
+            Refresh availability
+          </button>
+        </div>
+        <p id="provider-help" class="field-hint"></p>
+        <div id="agent-options">
+          <label class="field"
+            >Model <span class="optional">optional</span
+            ><input
+              id="model-name"
+              data-mutation
+              placeholder="Agent default"
+              autocomplete="off"
+              spellcheck="false"
+          /></label>
+          <div class="form-grid">
+            <label class="field"
+              >Reasoning effort<select id="agent-effort" data-mutation>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select></label
+            ><label class="field"
+              >Time per case (seconds)<input
+                id="agent-timeout"
+                type="number"
+                min="30"
+                max="1800"
+                step="1"
+                data-mutation
+            /></label>
+          </div>
+          <label id="claude-budget-field" class="field" hidden
+            >Budget per case (USD) <span class="optional">optional</span
+            ><input
+              id="claude-budget"
+              type="number"
+              min="0.01"
+              max="20"
+              step="0.01"
+              placeholder="1.00"
+              data-mutation
+          /></label>
+        </div>
+        <label class="field"
+          >Custom instructions<textarea
+            id="agent-instructions"
+            rows="4"
+            maxlength="8000"
+            placeholder="Conventions, edge cases, or details the agent should keep in mind…"
+            data-mutation
+          ></textarea>
+        </label>
+        <section class="context-section">
+          <div class="section-heading">
+            <h3>
+              Project context
+              <span id="context-count" class="tiny-label"></span>
+            </h3>
+            <button id="add-context-files" class="button small" data-mutation>
+              Add context files
+            </button>
+          </div>
+          <p class="field-hint">
+            Checked files are included as generation context. Uncheck a file to exclude it.
+          </p>
+          <div id="context-paths"></div>
+          <p id="context-empty" class="field-hint">Open a project to see its context files.</p>
+        </section>
+        <section class="prompt-section">
+          <div class="section-heading">
+            <h3>Exact prompt</h3>
+            <button id="preview-prompt" class="button small" data-mutation>Preview prompt</button>
+          </div>
+          <p class="field-hint" id="prompt-help">Preview saves your case and settings first.</p>
+          <pre
+            id="prompt-preview"
+            class="prompt-preview"
+            tabindex="0"
+            aria-label="Exact generation prompt"
+            hidden
+          ></pre>
+        </section>
+        <p id="settings-error" class="inline-error" role="alert" hidden></p>
+      </div>
+      <div class="drawer-footer">
+        <span id="settings-save-status" role="status">All settings saved</span>
+        <div class="button-row">
+          <button id="discard-settings" class="text-button" data-mutation hidden>Discard</button
+          ><button id="save-settings" class="button primary" data-mutation>Save settings</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog
+      id="confirm-dialog"
+      class="modal confirm-modal"
+      aria-labelledby="confirm-heading"
+      aria-describedby="confirm-description"
+    >
+      <h2 id="confirm-heading"></h2>
+      <p id="confirm-description" class="muted"></p>
+      <div class="dialog-footer">
+        <button id="confirm-cancel" class="button" autofocus>Keep editing</button
+        ><button id="confirm-accept" class="button danger">Discard changes</button>
+      </div>
+    </dialog>
     <script type="module" src="./app.ts"></script>
   </body>
 </html>

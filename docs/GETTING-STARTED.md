@@ -1,10 +1,10 @@
-# Getting started
+# Getting started with Testloom
 
-JourneyProof 0.1 is a Mac developer preview. Use Node.js **20.19 or later**, npm, and a trusted local project. Download the Apple Silicon app from [Releases](https://github.com/saketh12e/journeyproof/releases/tag/v0.1.0), or build from source below. The app is not Apple Developer signed or notarized; macOS may require **System Settings → Privacy & Security → Open Anyway**. Keep system-wide security protections enabled.
+Testloom v0.2 is an unsigned Apple Silicon developer preview. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
 
 ## Install and launch
 
-From the JourneyProof repository root:
+From the repository root:
 
 ```sh
 npm ci
@@ -12,55 +12,87 @@ npm run browsers
 npm start
 ```
 
-For Codex mode, install the [official Codex CLI](https://developers.openai.com/codex/cli), ensure `codex --version` works, and run `codex login` to sign in. Restart JourneyProof if you installed the CLI after opening the app. JourneyProof collects no API key. Calls use your CLI and Codex account; account access, available models, and usage limits apply. Portable mode needs no Codex login or model call.
+For a downloaded app, use the v0.2 Apple Silicon asset when available in [Releases](https://github.com/saketh12e/testloom/releases). Unzip it and move Testloom.app to Applications. macOS may require **System Settings → Privacy & Security → Open Anyway** because the preview is not Apple Developer signed or notarized. Keep system-wide protections enabled. [Migration](MIGRATION.md) explains existing JourneyProof installations.
 
-## Record the full cart flow
+For the downloaded app, install Node.js 20.19+ and its recording/test browser once:
 
-1. Load the bundled cart demo. The desktop app's `loadDemo` operation owns copying `examples/cart` into its working area and starting `server.mjs`. The default address is **http://127.0.0.1:4318**. If using the standalone sample instead, follow its [README](../examples/cart/README.md) and choose that folder as your project.
-2. Name the scenario **Save ten on essentials** and set that address as the start URL. Start recording **before** interacting with the cart. Use the browser opened by JourneyProof. A fresh browser session starts empty; use **Reset cart** if needed and include that reset in the recording.
-3. Click **Add Field notebook to cart** ($40.00), then **Add Canvas bag to cart** ($60.00). The subtotal is **$100.00**.
-4. Enter **SAVE10** in **Coupon code**, then click **Apply coupon**. Wait for the total to show **$90.00**.
-5. **Stop recording** in JourneyProof. Review the captured navigation, both add actions, coupon fill, and apply action. The observed total is evidence of what happened, not yet your requirement.
-6. Review the prefilled assertion or add your own: description **SAVE10 takes ten percent off the cart**, kind **text**, locator strategy **testId**, locator value **total**, and expected text **$90.00**. Save the scenario. Do not accept $95.00 because a broken app displayed it.
-7. Generate with **Portable** mode for the deterministic TypeScript path. The output belongs at **`tests/journeyproof/<slug>.spec.ts`** in the generated workspace. Codex mode can instead adapt to the selected repository's test conventions; review its output and warnings.
-8. Inspect the generated file and patch. The test must perform the whole journey and include an exact text check equivalent to `await expect(page.getByTestId('total')).toHaveText('$90.00')`. Check the start URL and port as well as the assertion.
-9. Use the recommended **Generated tests · confirm discovery** command. It targets the generated Playwright files, disables retries, and requires a JSON report confirming actual passing test discovery. The app prepares dependencies automatically for the demo only, using `--ignore-scripts`, and stops its demo server before running tests. The original project command is also available; custom commands have weaker discovery guarantees and require inspecting the output yourself.
-10. Review every run, its exit status, and warnings. Export the scenario, generated files/patch, and available verification evidence. Review the export for sensitive data before sharing it or copying the generated test into your original repository yourself.
+```sh
+npx playwright@1.63.0 install chromium
+```
 
-The assertion uses the shared `Assertion` contract: `kind: 'text'`, `locator: { strategy: 'testId', value: 'total' }`, `expected: '$90.00'`, and `source: 'user'`. Recording and assertion authoring remain separate operations.
+Portable generation needs no AI account. Codex is the primary agent option; install its [official CLI](https://developers.openai.com/codex/cli), check `codex --version`, and run `codex login`. For Claude, install and authenticate the official Claude Code CLI and check `claude --version`. Refresh agent availability after setup. Availability means the executable responds, not that account access or generation has been validated. See [agent setup and controls](AGENTS.md).
+
+## Run the three sample cases
+
+1. Open **Try the cart demo**. Testloom creates a local copy and starts the cart on an available loopback port. Use the active case URL shown in the app; the copied Playwright configuration uses that same port.
+2. Review the three hand-authored examples in the case library. They are fixtures, not recordings of your session.
+3. Select all three enabled cases and choose **Portable** generation. The app processes selected cases sequentially in one source copy, with a separate output folder per case.
+4. Review the generated files and patch. Confirm that each test performs both add actions, enters its coupon value and checks the expected result below.
+5. Run **Generated tests · confirm discovery**. For the demo, Testloom installs pinned test dependencies with `--ignore-scripts` and stops its own server so the test runner starts a fresh one. Review the actual results and discovery evidence.
+
+| Case | Coupon input | Required total | Required feedback |
+| --- | --- | --- | --- |
+| Positive | `SAVE10` | `$90.00` | Ten percent off the $100.00 cart |
+| Negative | `INVALID` | `$100.00` | `Coupon INVALID is invalid. No discount applied.` |
+| Boundary | Empty string | `$100.00` | `Enter a coupon code. No discount applied.` |
+
+**All three should pass on the healthy cart.** A negative case asserts correct rejection. The kind label does not invert the result, alter an input, add an assertion, or enable the runner's expected-failure mode.
+
+## Record and edit your own case
+
+1. With the demo open, name a new recording **Save ten on essentials** and use its loopback URL. Start recording before interacting with the browser Testloom opens.
+2. Add the **$40 Field notebook** and **$60 Canvas bag**. Enter **SAVE10** in **Coupon code** and click **Apply coupon**. Wait for the total.
+3. Return to Testloom and stop recording. Review navigation, both add actions, the fill and the apply action. A saved case is created; the raw recording remains separate.
+4. Add an explicit requirement: description **SAVE10 takes ten percent off the cart**, kind **text**, locator strategy **testId**, locator value **total**, expected text **$90.00**. Save the case. The observed total does not define the correct total.
+5. Duplicate it as a negative or boundary case. Edit the coupon fill value and every affected assertion. Set tags, priority and enabled status, then save. Editing a case does not rewrite its raw recording.
+6. Select 1–20 enabled cases. Choose Codex, Claude or Portable. For an agent, save your controls and inspect the selected case's prompt before generating. Review each case separately when a batch contains different data.
+7. Inspect the proposed code and warnings, verify, and export. A changed case needs new generation and verification; old evidence is not evidence for the edit.
+
+The library retains up to 500 cases for each connected project folder. Reopening that folder restores its library. History keeps the latest 100 generation records, with verification status updates; it is not a complete revision log or an automatic rerun system. [Suite format](SCENARIO-FORMAT.md) covers IDs and portability.
+
+## Import, export and adopt
+
+Open a project before importing a v2 suite JSON file. Import adds its cases to the library; conflicting case IDs are cloned into new variants. Review imported URLs, inputs, assertions and warnings before running anything. Imported screenshot paths are discarded.
+
+**Export suite** saves the editable library without project paths, provider settings or screenshot references. This is the portable handoff for another Testloom installation; the receiver still supplies the app, dependencies, fixtures and services.
+
+**Export results** creates an evidence bundle with the library (`suite.json`), active scenario (`scenario.json`), and, when generated, the batch's case snapshot (`generated-suite.json`), code, patch and generation metadata. Available verification and eligible screenshots are included separately. Review the whole bundle for sensitive data. Copy reviewed tests into your original repository yourself; Testloom does not apply the patch there.
 
 ## Verify the deliberate discount bug
 
-Do this in the **generated cart workspace**, where the generated file exists, after installing its dependencies with `npm ci`. Stop any app-managed or manually started cart server first so the test owns a fresh server. Do not change the generated test between the healthy and broken runs.
-
-The generated basename includes the scenario slug and a short ID. Replace `12345678` below with the ID in your actual generated filename:
+Work in the **generated cart workspace** after installing its dependencies. Stop your own existing cart server so a healthy process cannot hide the mutation. Use the exact generated positive-case file path shown by Testloom, including its `case-<id>` folder:
 
 ```sh
-JOURNEYPROOF_FRESH_SERVER=1 JOURNEYPROOF_BROKEN_DISCOUNT=0 npm test -- tests/journeyproof/save-ten-on-essentials-12345678.spec.ts
-JOURNEYPROOF_FRESH_SERVER=1 JOURNEYPROOF_BROKEN_DISCOUNT=1 npm test -- tests/journeyproof/save-ten-on-essentials-12345678.spec.ts
+TESTLOOM_CASE_FILE='tests/testloom/case-<id>/<generated-file>.spec.ts'
+JOURNEYPROOF_FRESH_SERVER=1 JOURNEYPROOF_BROKEN_DISCOUNT=0 npm test -- "$TESTLOOM_CASE_FILE"
+JOURNEYPROOF_FRESH_SERVER=1 JOURNEYPROOF_BROKEN_DISCOUNT=1 npm test -- "$TESTLOOM_CASE_FILE"
 ```
 
-The intended result is a healthy pass followed by a failed exact-text assertion: expected **$90.00**, received **$95.00**. A port conflict, missing browser, timeout, or missing test is an environment problem, not evidence of discount detection. The config refuses server reuse when mutation mode or fresh-server mode is set. If a generated test hardcodes a different URL, align it with the server before running and keep that same test for both runs.
+Replace both placeholders before running. Keep the generated test unchanged between runs. The expected evidence is a healthy pass followed by an assertion failure: **$90.00 expected, $95.00 received**. A port conflict, missing browser, timeout or missing test is not discount-detection evidence. The legacy environment-variable names remain intentional compatibility details.
 
-The fixture's `npm run test:contract` is a separate developer check, outside normal test discovery. It cannot substitute for running the app-generated test. Actual release checks are recorded in [Validation](VALIDATION.md).
+The cart's `npm run test:contract` is a separate fixture check and cannot replace testing the app-generated file. The v0.2 suite checks passed all three healthy cases and detected the disclosed discount mutation. See [Validation](VALIDATION.md) for exact results.
 
-## Use your own repository
+## Connect your own project
 
-Choose its test module folder, review the detected framework, example tests, and available commands, and start its application using its own documented setup. Record against the reachable app URL. Add requirements explicitly, then generate and inspect the resulting tests in the copy. Install dependencies and supply test data or services required by that project.
+Choose the test module folder, review the detected framework and example tests, and start its application using that project's setup. Use **Add context files** for relevant page objects, helpers or configuration; check **Preview prompt** to see what fits. Excerpts are cached at connection/addition, so reconnect to refresh them and re-add specific files as needed. Your saved project cases survive folder switching. Record the reachable app URL. Review agent context, add expected results, generate and inspect the copied workspace. Supply that project's dependencies, services and safe test data in the copy.
 
-Repository inspection is heuristic. Playwright TypeScript is the bundled runnable path. Playwright Java is a portable-generation target; Maven/Gradle and Selenium Java adaptation require project-specific review and toolchains. See the [Java notes](../examples/java/README.md). Unknown frameworks and unsupported interactions need manual work.
+Inspection is heuristic: npm/Maven/Gradle detection and Selenium clues do not establish universal compatibility. Portable targets are Playwright TypeScript and Playwright Java/JUnit 5; see the [Java example](../examples/java/README.md). Custom assertions and unsupported recording steps need an agent proposal or manual implementation and review.
 
-Generation leaves the connected original untouched, but scripts run with local user rights. The copy is not an OS sandbox, and browser workflows can change remote state. Review any install and verification command before running trusted repository code.
+Snapshots support up to 8,000 included files, 20 MB per file and 250 MB total, with bounded directory depth. Choose a smaller module when necessary. Exclusions can remove needed dependencies or configuration. The copy is not an OS sandbox: execute only project commands you trust.
 
 ## Troubleshooting
 
 | Symptom | Next step |
 | --- | --- |
-| `npm ci` rejects the lockfile | Use a complete source checkout with matching package and lockfile; report the mismatch. |
-| Chromium executable is missing | Run `npm run browsers` in the relevant project and use the same browser-cache environment when running tests. |
-| Port 4318 is occupied | The built-in demo uses 4318. Stop your own server, or run the standalone sample with `PORT` set to a free port and connect its folder. Avoid terminating unrelated processes. |
-| Codex is unavailable or not signed in | Check `codex --version`, run `codex login`, then restart the app; use Portable mode for supported templates. |
-| Only the baseline test ran | Check the generated path and test discovery; run the generated filename explicitly. |
-| Recorded credentials were redacted | Add safe fixtures or environment-backed setup manually; do not insert real secrets into the scenario. |
-| Verification failed before reaching the assertion | Repair the dependency, server, authentication, or test-data setup and rerun; preserve the original evidence. |
-| Generated test changed on disk | Generate a new proposal before verifying or exporting. Evidence is tied to the exact proposed test bytes. |
+| Missing Chromium | Run `npm run browsers` in the relevant project. The recorder may fall back to installed Google Chrome; the test runner may still need its pinned Chromium. |
+| Demo/server startup fails | The desktop demo chooses an available port; use its displayed URL. The standalone cart defaults to 4318 and accepts `PORT`. Inspect the error and stop only a server you own. |
+| Agent unavailable or generation rejected | Check CLI installation, login, model and account access; refresh availability. Try one small case or Portable for supported templates. |
+| Timeout or Claude budget exhausted | Inspect the error, simplify the case or revise its budget within the supported bounds. No passing test is claimed. |
+| Import rejected | Check the [v2 schema](../schemas/scenario-v2.schema.json), IDs, URLs and 500-case combined library limit. Keep the file below 5,000,000 bytes. |
+| Recorded input is redacted | Use synthetic data or an existing safe fixture. Do not add real credentials to the case. |
+| Only a baseline test ran | Use the generated-files command and inspect discovery evidence. Confirm Java/custom runner discovery manually. |
+| Generated bytes changed on disk | Generate a new proposal before verification or export; evidence is bound to the proposed bytes. |
+| Save failed | Check disk space and export the suite before closing. Persistence errors must not be treated as saved changes. |
+| A moved project has an empty library | Libraries are keyed by canonical folder path. Export from the old location and import into the new one. |
+
+See [limitations](LIMITATIONS.md) before using company projects or sensitive data.

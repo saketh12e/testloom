@@ -1,65 +1,103 @@
 # Architecture
 
-This describes the 0.1 contract in `src/shared/types.ts`, the source structure, and decisions from `docs/BUILD-PLAN.md`. Actual checks are recorded separately in [Validation](VALIDATION.md).
+Testloom v0.2 separates raw observations, editable requirements, generated code and execution evidence. The shared contracts live in `src/shared/types.ts`; the service in `src/core/service.ts` owns state and operations. [Validation](VALIDATION.md) records checks separately from this design description.
 
-## Data flow
+## Suite and agent pipeline
 
-```text
-Trusted local project ── inspect ──> Project + example tests + commands
-                                       │
-Browser actions ── recorder ──> Scenario + user-authored assertions
-                                       │
-                         Separate project snapshot
-                                       │
-                 Codex generation / portable templates
-                                       │
-                    Validate files → reviewable patch
-                                       │
-                 Selected test command → Verification
-                                       │
-                          Evidence export and review
+```mermaid
+flowchart TD
+    P[Trusted local test project] --> I[Inspect and cache bounded examples]
+    F[Native context file picker] --> I
+    B[Browser recording] --> R[Retained raw recording]
+    R --> C[Editable project case library]
+    J[Portable v2 suite JSON] -->|Validate and import| C
+    C -->|Export| J
+    C --> S[Select 1 to 20 enabled cases]
+    I --> V[Prompt preview and exclusions]
+    S --> V
+    P --> W[Separate source snapshot]
+    V --> A{Author each case}
+    A --> X[Codex CLI]
+    A --> Y[Claude Code CLI]
+    A --> T[Portable templates]
+    X --> G[Validate files and case output folders]
+    Y --> G
+    T --> G
+    W --> G
+    G --> D[Review new files and patch]
+    D --> E[Run selected test command]
+    E --> H[Results, discovery evidence and file hashes]
+    H --> O[Evidence export]
+    G --> L[Latest 100 generation records]
+    H --> L
 ```
 
-The desktop renderer presents state and user actions. The main process owns native operations, project access, the recorder browser, generation, child processes, and exports. A preload bridge exposes the narrow `JourneyAPI`; it should not expose raw IPC, arbitrary filesystem access, or a general command runner to web content. The recorded application runs in a Playwright browser rather than the privileged desktop interface.
+Portable generation uses scenario actions and assertions directly; provider preferences and source excerpts do not alter its templates. Generation snapshots the selected cases before processing them sequentially. Files are written only after all selected cases have produced results and the combined batch has passed file validation. A failed batch may leave its source copy for inspection; it is not published as a successful generation.
 
-## Shared contracts
+## Shared contracts and persistence
 
-| Type | Responsibility |
+| Contract | Responsibility |
 | --- | --- |
-| `Project` | Canonical project path, framework/build-tool clues, sample test content, candidate commands, generated output directory. |
-| `InteractionEvent` | Ordered action, page identity, URL, locator candidates, optional value/redaction/screenshot/warnings. |
-| `Scenario` | Schema version 1, start URL, recorded events, separate assertions, warnings, and method/URL/status network metadata. |
-| `Assertion` | An explicit user requirement: text, visibility, URL, or custom; always `source: 'user'`. |
-| `Generation` | Provider (`codex` or `portable`), proposed files, workspace, patch, summary, warnings, generation time. |
-| `Verification` | Actual command and individual runs, with exit code, duration, output, and distinct failure/environment/timeout/cancellation states. |
-| `AppState` | Project/scenario/results, activity, errors, CLI availability, workspace root, and active phase. |
+| `Project` | Canonical folder, framework/build clues, cached examples, commands and output directory |
+| `Scenario` | Version 1 event ledger, start URL, user assertions, warnings and request metadata |
+| `TestCase` | Stable case ID, recording reference, editable scenario, kind, priority, tags, enabled status and update time |
+| v2 suite | Provider-independent JSON envelope containing cases; validated by `src/core/suite.ts` |
+| `AgentSettings` | Provider, model, effort, timeout, instructions, exclusions and Claude budget |
+| `Generation` | Files, patch, workspace, provider/settings, selected case IDs and per-case file mapping |
+| `Verification` | Actual command, per-run statuses/output, optional generated-file hashes and discovered test names |
+| `RunRecord` | Bounded generation history entry, later updated with verification status |
+| `AppState` | Current project/case, library, settings, history, active phase and activity |
 
-`JourneyAPI` separates choosing a project or loading a demo, starting/stopping recording, saving assertions, generating, verifying, exporting, revealing the workspace, cancellation, and state subscriptions. UI readiness and transitions must follow the main process state rather than assume a successful click completed the operation.
+Session writes are queued and replaced through temporary files. A separate library file is keyed by a hash of the canonical project path. Switching folders saves and restores their cases and history; moving a folder changes that key. Context excerpts are cached at inspection or explicit addition, not continuously read from source.
 
-## Project copy and generation
+Stopping a recording writes `recordings/<recording-id>/recording.json` before creating the editable case. Edits and duplication preserve `recordingId`; removal from the library retains the raw recording. This separation is not tamper-proof storage or a complete version history. Imported suites do not bring local raw recordings or screenshots with them.
 
-`src/core/repository.ts` detects npm, Maven, or Gradle and a bounded set of test examples. Detection is heuristic. Snapshots omit selected dependency/build folders, symlinks, and recognizable credential files. They record source provenance and enforce file-count, depth, individual-size, and total-size limits. Exclusions are not a complete secret detector, and omitted dependencies must be supplied in the copy.
+The library holds 500 cases and the history retains the latest 100 generation records. History pruning does not automatically delete old workspaces or recordings. See [Migration](MIGRATION.md) for retained on-disk names and [Suite format](SCENARIO-FORMAT.md) for import rules.
 
-Generated paths are constrained to the project's output directory, reject traversal and duplicates, and refuse to overwrite existing files. The TypeScript portable path is `tests/journeyproof/<slug>.spec.ts`; Java output belongs under `src/test/java/journeyproof`. Schema-conforming output still needs path validation and human review.
+## Source copies and output folders
 
-Codex generation uses the documented noninteractive `codex exec` CLI with a read-only sandbox, an empty working directory, and a JSON output schema. Its prompt includes bounded, redacted tests, helpers, build configuration and the scenario ledger. The original repository path is not passed to the agent. The installed Codex runtime retains its configured capabilities within its sandbox; this is not a claim that all local reads are confined to that prompt. There is no Codex SDK dependency and no screenshot attachment to generation in 0.1. The app validates returned files and writes append-only tests into its copy. Portable generation uses deterministic supported templates without a model call. Custom assertions and unsupported events must not be represented as successful verification merely because a file was produced.
+`repository.ts` inspects a bounded module and copies included regular files into a run workspace outside the source folder. It excludes known dependency/build folders, credential filenames and symlinks, and records a source digest. Limits are 8,000 included files, 20,000,000 bytes per file, 250,000,000 bytes total and directory depth 16. It is not a Git checkout requirement or an atomic filesystem snapshot.
 
-## Recorder and requirements
+Generation writes only new `.ts`, `.js` or `.java` files below:
 
-The recorder captures supported DOM actions and locator candidates, favoring stable test IDs and accessible controls. Sensitive field values are redacted and unsupported actions generate warnings. Stopping must flush pending actions before generation. Screenshots and traces are evidence, not a substitute for user requirements: a recorded buggy total cannot define the expected total.
+- TypeScript/JavaScript: `tests/testloom/case-<case-id>/`
+- Java: `src/test/java/testloom/case-<case-id>/`; portable Java declares `package testloom`.
 
-The first recorder has limits including frames, uploads, canvas gestures, and complex multi-page flows. The shared event vocabulary being able to name an action does not establish complete replay support. See [limitations](LIMITATIONS.md).
+Paths reject traversal, duplicate names, symlinks and overwrites. Each provider result permits 1–12 files of at most 150,000 characters each; the combined writer caps a batch at 100 files and 5,000,000 code characters. The copy retains `.journeyproof/` for provenance, suite snapshot, generation, patch and verification metadata.
 
-## Demo ownership
+The [agent controls](AGENTS.md) describe cached context, prompt limits and provider-specific restrictions. Agents start in fresh temporary directories; Testloom validates their returned file lists before writing them into the copy. Schema conformance alone does not establish semantic correctness.
 
-The bundled fixture is `examples/cart`, an independent npm project with a dependency-free Node HTTP server and a pinned Playwright test runner. `loadDemo` in the desktop owner is responsible for copying the fixture, starting `server.mjs`, waiting for readiness, selecting the copied project, and managing server lifetime. Its default loopback port is 4318; `PORT` overrides it. The sample does not implement desktop IPC or process ownership.
+## Assurance boundary
 
-The desktop service stops its demo server before verification; Playwright's `webServer` then starts the copied `server.mjs` at the same URL. Demo dependencies are prepared automatically with `--ignore-scripts`; other projects require their own setup. Ordinary standalone tests may reuse an existing server, but CI, fresh-server, and mutation runs refuse reuse so a stale healthy process cannot hide the injected defect. Browser contexts receive separate cookie sessions; the server calculates amounts in cents. The baseline smoke journey does not exercise SAVE10. The `checks` suite is only selected by `test:contract`; generated tests use normal `tests/journeyproof` discovery.
+```mermaid
+flowchart LR
+    U[Local desktop renderer] -->|Narrow typed preload API| M[Electron main process]
+    M -->|Sender, frame and operation checks| S[Service and validators]
+    WEB[Recorded website] -->|Authenticated bounded recorder packets| REC[Recorder]
+    REC --> S
+    S -->|Reviewed bounded prompt| CLI[Installed agent CLI]
+    CLI --> CLOUD[Configured model provider]
+    S -->|Executable and argument array| RUN[Trusted project commands]
+    RUN --> EXT[Local user files and external services]
+    S --> COPY[Separate source copy]
+```
 
-## Verification and trust
+The desktop uses context isolation, renderer sandboxing, disabled Node integration, denied new windows/navigation and a narrow `JourneyAPI`. IPC handlers check the application sender, main frame and internal URL; validators enforce operation-specific fields and limits. The bridge exposes named operations, not unrestricted filesystem or raw IPC access. The recorded site runs in a separate Playwright browser.
 
-`src/core/process.ts` starts an executable with argument arrays, captures bounded output, and supports timeout and cancellation. Avoiding shell interpolation does not make the invoked repository script safe. npm scripts, Maven/Gradle plugins, subprocesses, and browser requests can act outside the working directory with local user rights. A project snapshot is not an OS sandbox.
+Recorder packets carry a per-session nonce and undergo size/semantic checks. Event/network counts and stop flushing are bounded. Instrumentation still runs in the page world; these mitigations do not establish resilience to every hostile page. Unsupported actions and incomplete capture remain visible warnings.
 
-Results are per run, with environment errors distinct from assertion failures. Generated files are checked against the proposed bytes before and after verification and again before export; SHA-256 hashes bind evidence to those test bytes. Manually edited generated tests must be regenerated before verification or export. The recommended Playwright command targets generated test files and emits a JSON report. The app accepts only discovered, passing tests with no skipped, expected-failure or retry-only results. Custom commands retain the weaker meaning of successful process execution. Repeated success does not prove general reliability.
+**The source copy and Electron renderer sandbox do not sandbox test commands.** npm scripts, Maven/Gradle plugins, subprocesses and browser requests act with local user permissions. Context exclusions do not constrain those commands or the provider's independent configuration.
 
-Cancellation terminates only the process group owned by the run, escalates to SIGKILL after a bounded grace period, and awaits cleanup even when its leader exits first. Application shutdown waits for that cleanup. The recorder bridge authenticates packets using a per-session nonce captured before page scripts execute, validates packet sizes and semantics, and caps event/network counts. Stop uses an authenticated callback and a bounded flush deadline. These mitigations are tested but do not turn page-world recording into a fully isolated security boundary.
+## Verification and process ownership
+
+`process.ts` uses an executable and argument array, bounded diagnostic output, timeout and cancellation. The active run owns a detached process group; cancellation signals that group, escalates after a grace period and awaits cleanup. Shutdown waits for active work. Already-completed effects cannot be rolled back.
+
+Verification runs the selected command one to three times, stopping at the first nonpass. Timeout, cancellation and recognized environment errors remain distinct from assertion failures. The verification timeout is separate from agent time controls.
+
+The recommended Playwright command targets generated filenames and disables retries. Its JSON-report adapter requires every reported spec and project variant in each expected generated file to pass in exactly one attempt, and rejects reported errors or interruptions. Missing/empty files, skips, expected failures and retried results cannot satisfy that witness. It does not independently enumerate declarations omitted from the report or prove that every requirement was asserted. Java and custom commands need manual discovery review until dedicated report adapters exist.
+
+Generated bytes are compared with the proposal before and after verification and before export. SHA-256 hashes bind evidence to those files, not every dependency, remote service or future run. Changing generated bytes requires a new proposal. Negative cases assert expected rejection in ordinary passing tests; case kind does not invert verification status.
+
+## Bundled demo
+
+`loadDemo` copies the independent cart fixture, chooses an available loopback port, updates only its copied Playwright configuration and seeds three hand-authored cases: valid, invalid and empty coupons. Users can immediately generate all three or record another flow. Before verification, the service stops its own demo server and prepares demo dependencies with `--ignore-scripts`; Playwright starts a fresh server. Other projects supply their own setup. The cart's baseline smoke and separate contract checks do not substitute for running generated tests against the healthy and deliberately broken cart.

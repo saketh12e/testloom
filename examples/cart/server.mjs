@@ -113,7 +113,7 @@ const sweep = setInterval(() => {
 }, 60_000).unref();
 server.on('error', error => { console.error(`Cart server: ${error.message}`); process.exitCode = 1; });
 server.listen(port, '127.0.0.1', () => {
-  console.log(`JourneyProof cart ready at ${origin}${brokenDiscount ? ' (deliberately broken discount)' : ''}`);
+  console.log(`Testloom cart ready at ${origin}${brokenDiscount ? ' (deliberately broken discount)' : ''}`);
 });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
   clearInterval(sweep);

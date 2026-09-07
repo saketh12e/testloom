@@ -1,544 +1,1877 @@
-import type { AppState, Assertion, JourneyAPI, LocatorSpec, TestCommand } from '../shared/types';
+import type {
+  AgentProvider,
+  AgentSettings,
+  AppState,
+  Assertion,
+  CaseKind,
+  InteractionEvent,
+  JourneyAPI,
+  LocatorSpec,
+  TestCase,
+  TestCommand,
+} from '../shared/types';
 
 const api = (window as Window & { journey?: JourneyAPI }).journey;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
-  const element = document.getElementById(id);
-  if (!element) throw new Error(`Missing interface element: ${id}`);
-  return element as T;
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`Missing interface element: ${id}`);
+  return node as T;
 };
 const input = (id: string) => $<HTMLInputElement>(id);
 const select = (id: string) => $<HTMLSelectElement>(id);
-const text = (id: string, value: string) => { $(id).textContent = value; };
-const show = (id: string, visible: boolean) => { $(id).hidden = !visible; };
-const enable = (id: string, enabled: boolean) => { ($<HTMLButtonElement>(id)).disabled = !enabled; };
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', content?: string): HTMLElementTagNameMap[K] {
+const dialog = (id: string) => $<HTMLDialogElement>(id);
+const show = (id: string, visible: boolean) => {
+  $(id).hidden = !visible;
+};
+const text = (id: string, value: string) => {
+  if ($(id).textContent !== value) $(id).textContent = value;
+};
+const enable = (id: string, enabled: boolean) => {
+  $<HTMLButtonElement>(id).disabled = !enabled;
+};
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className = '',
+  content?: string,
+): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   node.className = className;
   if (content !== undefined) node.textContent = content;
   return node;
 }
-
+const clone = <T>(value: T): T => structuredClone(value);
+const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ');
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+const providers: Record<AgentProvider, string> = {
+  codex: 'Codex',
+  claude: 'Claude',
+  portable: 'Portable',
+};
+const strategies: [LocatorSpec['strategy'], string][] = [
+  ['testId', 'Test ID'],
+  ['role', 'Role'],
+  ['label', 'Label'],
+  ['placeholder', 'Placeholder'],
+  ['text', 'Text'],
+  ['css', 'CSS selector'],
+];
+const phases = {
+  idle: 'Ready when you are.',
+  recording: 'Recording your browser',
+  generating: 'Generating your tests',
+  verifying: 'Verifying the outcome',
+};
+const defaults: AgentSettings = {
+  provider: 'codex',
+  model: '',
+  effort: 'medium',
+  timeoutSeconds: 480,
+  instructions: '',
+  excludedContextPaths: [],
+  claudeBudgetUsd: 1,
+};
+const semantics: Record<CaseKind, string> = {
+  positive:
+    'A positive case passes when the intended action succeeds. Assert the successful result, such as a confirmation or the correct total.',
+  negative:
+    'A negative case passes when invalid input is rejected as expected. Assert the validation message or unchanged result. The test itself should pass; do not simply invert the positive expectation.',
+  boundary:
+    'A boundary case passes when a limit behaves as specified. Set an empty, minimum, maximum, or just-outside value in Recorded steps, then assert the exact expected result.',
+};
 let state: AppState | undefined;
+let draft: TestCase | undefined;
+let caseDirty = false;
+let settingsDraft = clone(defaults);
+let settingsDirty = false;
 let pending = '';
 let cancelling = false;
-let activeTab: 'ledger' | 'generated' | 'verification' = 'ledger';
-let assertions: Assertion[] = [];
-let dirty = false;
-let formIdentity = '';
-let commandIdentity = '';
-let contextIdentity = '';
-let generationIdentity = '';
-let verificationIdentity = '';
-let eventSignature = '';
+let currentPage: 'cases' | 'editor' | 'results' = 'cases';
+let editorTab: 'steps' | 'expectations' | 'details' = 'steps';
+let resultTab: 'generated' | 'verification' | 'history' = 'generated';
+let filter: 'all' | CaseKind = 'all';
+let selectedIds = new Set<string>();
 let selectedFile = 0;
-let dismissedError = '';
-let localError = '';
-let retry: (() => void) | undefined;
 let streamVersion = 0;
 let unsubscribe: (() => void) | undefined;
-const phaseLabels = { idle: 'Ready', recording: 'Recording browser', generating: 'Generating test', verifying: 'Running verification' };
-
-function reportError(error: unknown, heading = 'Something needs attention', help = 'Review the details and try the action again.', retryAction?: () => void) {
-  localError = error instanceof Error ? error.message : String(error);
-  text('error-heading', heading);
-  text('error-message', localError);
-  text('error-help', help);
-  retry = retryAction;
-  show('retry-button', !!retry);
-  show('error-banner', true);
+let dismissedError = '';
+let lastProjectId = '';
+let listSignature = '';
+let editorSignature = '';
+let settingsSignature = '';
+let contextSignature = '';
+let generationSignature = '';
+let verificationSignature = '';
+let historySignature = '';
+let commandsSignature = '';
+let toastTimer: number | undefined;
+let confirmAction: (() => void) | undefined;
+let savedFocus: HTMLElement | null = null;
+// A streamed status update must never replace the text the user is editing.
+const retainedDrafts = new Map<string, TestCase>();
+const idle = () => !!api && !!state && state.phase === 'idle' && !pending;
+const activeCase = () => state?.cases.find((item) => item.id === state?.activeCaseId);
+const mutable = <T extends HTMLElement>(node: T): T => {
+  node.dataset.mutation = '';
+  return node;
+};
+function toast(message: string) {
+  text('toast', message);
+  show('toast', true);
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => show('toast', false), 4200);
 }
-
-async function perform(label: string, action: () => Promise<unknown>, help: string, retryable = false) {
-  if (pending) return;
+function report(error: unknown, heading = 'Something needs attention') {
+  const message = error instanceof Error ? error.message : String(error);
+  text('error-heading', heading);
+  text('error-message', message);
+  show('error-banner', true);
+  for (const name of ['settings', 'record'])
+    if (dialog(`${name}-dialog`).open) {
+      text(`${name}-error`, message);
+      show(`${name}-error`, true);
+    }
+}
+function invalidatePrompt() {
+  show('prompt-preview', false);
+  text('prompt-help', 'Preview saves your current case and settings, then shows the exact prompt.');
+}
+function changedCase() {
+  if (!draft || !idle()) return;
+  caseDirty = true;
+  invalidatePrompt();
+  text('editor-heading', draft.name || 'Untitled case');
+  text('nav-case-name', draft.name || 'Untitled case');
+  updateSemantics();
+  renderControls();
+}
+function updateSemantics() {
+  const kind = draft?.kind ?? 'positive';
+  text('editor-kind', capitalize(kind));
+  $('editor-kind').className = `badge ${kind}`;
+  text('expectation-semantics', semantics[kind]);
+  $('expectation-semantics').className = `semantic-note ${kind}`;
+}
+async function callState(action: () => Promise<AppState>) {
+  const version = streamVersion;
+  const next = await action();
+  // An IPC response can trail a newer live update. Keep the newer state.
+  if (version === streamVersion) receive(next);
+  return next;
+}
+async function perform(label: string, action: () => Promise<unknown>): Promise<boolean> {
+  if (!idle()) return false;
   pending = label;
-  localError = '';
   dismissedError = state?.error ?? '';
   show('error-banner', false);
-  render();
+  show('settings-error', false);
+  show('record-error', false);
+  renderControls();
   try {
-    const result = await action();
-    if (result && typeof result === 'object' && 'phase' in result) receive(result as AppState);
+    await action();
+    return true;
   } catch (error) {
-    reportError(error, `${label} could not finish`, help, retryable ? () => { void perform(label, action, help, true); } : undefined);
+    report(error, `${label} couldn’t finish`);
+    return false;
   } finally {
     pending = '';
     render();
   }
 }
-
 function receive(next: AppState) {
+  const previous = state;
+  const projectChanged = next.project?.id !== lastProjectId;
   state = next;
-  const identity = `${next.project?.id ?? ''}:${next.scenario?.id ?? ''}`;
-  if (identity !== formIdentity) {
-    formIdentity = identity;
-    input('scenario-name').value = next.scenario?.name ?? '';
-    input('start-url').value = next.scenario?.startUrl ?? '';
-    input('capture-screenshots').checked = false;
-    assertions = structuredClone(next.scenario?.assertions ?? []);
-    dirty = false;
-    generationIdentity = '';
-    verificationIdentity = '';
-    eventSignature = '';
-    renderAssertions();
-    setTab('ledger');
+  if (projectChanged) {
+    lastProjectId = next.project?.id ?? '';
+    selectedIds.clear();
+    filter = 'all';
+    input('case-search').value = '';
+    currentPage = 'cases';
+    listSignature = '';
+    contextSignature = '';
+    commandsSignature = '';
+    invalidatePrompt();
     show('export-result', false);
-  // Routine streaming updates must not replace the current name or assertion draft.
-  } else if (!dirty && next.scenario) {
-    input('scenario-name').value = next.scenario.name;
-    const updated = JSON.stringify(next.scenario.assertions);
-    if (updated !== JSON.stringify(assertions)) {
-      assertions = structuredClone(next.scenario.assertions);
-      renderAssertions();
-    }
   }
-  const nextCommandIdentity = `${next.project?.id ?? ''}:${JSON.stringify(next.project?.commands ?? [])}`;
-  if (commandIdentity !== nextCommandIdentity) {
-    commandIdentity = nextCommandIdentity;
-    const commands = select('test-command');
-    commands.replaceChildren();
-    (next.project?.commands ?? []).forEach((command, index) => commands.add(new Option(command.label || `${command.executable} ${command.args.join(' ')}`, String(index))));
-    commands.add(new Option('Custom executable…', 'custom'));
-    commands.value = next.project?.commands.length ? '0' : 'custom';
-    updateCommand();
+  const active = activeCase();
+  if (active?.id !== draft?.id) {
+    if (draft && caseDirty) retainedDrafts.set(draft.id, clone(draft));
+    draft = active ? clone(retainedDrafts.get(active.id) ?? active) : undefined;
+    caseDirty = !!active && retainedDrafts.has(active.id);
+    editorSignature = '';
+    editorTab = 'steps';
+    invalidatePrompt();
+  } else if (active && !caseDirty && JSON.stringify(active) !== editorSignature)
+    draft = clone(active);
+  if (!settingsDirty) settingsDraft = clone(next.settings ?? defaults);
+  // Only an actual new recording should take over the editor; demo loading stays in the library.
+  if (next.phase === 'recording' && previous?.phase !== 'recording') {
+    currentPage = 'editor';
+    editorTab = 'steps';
   }
+  if (previous?.phase === 'recording' && next.phase === 'idle' && active) {
+    currentPage = 'editor';
+    editorTab = active.scenario.assertions.length ? 'steps' : 'expectations';
+    toast(
+      active.scenario.assertions.length
+        ? 'Recording saved as a new case.'
+        : 'Recording saved. Add an expectation to define success.',
+    );
+  }
+  selectedIds = new Set(
+    [...selectedIds].filter((id) => next.cases.some((item) => item.id === id && item.enabled)),
+  );
+  if (next.error && next.error !== dismissedError) report(next.error);
   render();
 }
-
 function render() {
-  const connected = !!state && !!api;
-  const idle = connected && state?.phase === 'idle' && !pending;
-  const hasProject = !!state?.project;
-  const hasScenario = !!state?.scenario;
-  const recording = state?.phase === 'recording';
-  const busy = !!pending || (!!state && state.phase !== 'idle');
-  show('welcome', !hasProject);
-  show('journey-section', hasProject);
-  text('project-name', state?.project?.name ?? 'No project open');
-  text('project-framework', state?.project ? `${state.project.framework === 'unknown' ? 'Framework not detected' : state.project.framework} · ${state.project.buildTool || 'Local repo'}` : 'Choose a local repository');
-  text('project-path', state?.project?.path ?? '');
-  $('project-path').title = state?.project?.path ?? '';
-  show('project-context', hasProject);
-  const contextPaths = state?.project?.examples.map(example => example.path) ?? [];
-  const nextContextIdentity = JSON.stringify([state?.project?.id, contextPaths]);
-  if (contextIdentity !== nextContextIdentity) {
-    contextIdentity = nextContextIdentity;
-    text('context-count', `${contextPaths.length} file${contextPaths.length === 1 ? '' : 's'}`);
-    $('context-paths').replaceChildren(...contextPaths.map(path => element('li', '', path)));
-    show('context-empty', contextPaths.length === 0);
+  renderLibrary();
+  renderEditor();
+  renderSettings();
+  renderResults();
+  renderActivity();
+  renderNavigation();
+  renderControls();
+}
+function renderNavigation() {
+  if (currentPage === 'editor' && !draft && state?.phase !== 'recording') currentPage = 'cases';
+  for (const page of ['cases', 'editor', 'results'] as const) {
+    show(`page-${page}`, currentPage === page);
+    const node = $(`nav-${page}`);
+    if (currentPage === page) node.setAttribute('aria-current', 'page');
+    else node.removeAttribute('aria-current');
   }
-  text('scenario-count', hasScenario ? '1' : '—');
-  text('scenario-nav-name', state?.scenario?.name ?? 'Your first journey');
-  show('scenario-dot', hasScenario);
-  enable('scenario-nav', hasProject);
-  text('rail-hint', state?.project?.summary || 'The best tests begin with a real interaction.');
-  text('connection-state', connected ? 'On your Mac' : 'Disconnected');
-  $('connection-state').prepend(element('span'));
-  $('connection-state').classList.toggle('connected', connected);
-  text('journey-title', state?.scenario?.name || state?.project?.name || 'A new journey');
-  text('phase-chip', pending || (state?.phase && state.phase !== 'idle' ? phaseLabels[state.phase] : state?.scenario?.events.length ? 'Journey captured' : 'Ready to record'));
-  $('phase-chip').className = `status-chip ${state?.phase ?? ''}`;
-  ['open-project', 'load-demo', 'rail-project'].forEach(id => enable(id, idle));
-  enable('start-recording', idle && hasProject);
-  show('start-recording', !recording);
+  show('welcome', !state?.project);
+  show('library', !!state?.project);
+  show('nav-editor', !!draft || state?.phase === 'recording');
+  text('breadcrumb-page', currentPage === 'editor' ? 'Case editor' : capitalize(currentPage));
+  text('breadcrumb-project', state?.project?.name || 'Your workspace');
+  text('project-name', state?.project?.name || 'Open a project');
+  const frameworks = {
+    'playwright-ts': 'Playwright · TypeScript',
+    'playwright-java': 'Playwright · Java',
+    'selenium-java': 'Selenium · Java',
+    unknown: 'Local project',
+  };
+  text(
+    'project-framework',
+    state?.project ? frameworks[state.project.framework] : 'Choose a local folder',
+  );
+  $('rail-project').title = state?.project?.path || 'Open a project folder';
+  text('case-count', String(state?.cases.length ?? 0));
+  text(
+    'nav-case-name',
+    state?.phase === 'recording'
+      ? state.scenario?.name || 'New recording'
+      : draft?.name || 'Active case',
+  );
+  text('connection-state', state ? 'On your Mac' : 'Disconnected');
+  $('connection-dot').classList.toggle('connected', !!state);
+  show('result-dot', !!state?.generation);
+  const settings = state?.settings ?? defaults;
+  text(
+    'agent-label',
+    `${providers[settings.provider]}${settings.provider === 'codex' && !settings.model ? ' · default' : ''}`,
+  );
+  setSubTab('editor', editorTab);
+  setSubTab('result', resultTab);
+}
+function generationIds(): string[] {
+  if (currentPage === 'cases') return [...selectedIds];
+  return draft ? [draft.id] : [];
+}
+function renderControls() {
+  const ready = idle();
+  const recording = state?.phase === 'recording';
+  document
+    .querySelectorAll<
+      HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement
+    >('[data-mutation]')
+    .forEach((node) => {
+      node.disabled = !ready;
+    });
+  enable('record-button', ready && !!state?.project);
+  show('record-button', !recording);
   show('stop-recording', recording);
-  enable('stop-recording', recording && !pending);
-  input('scenario-name').disabled = !idle || !hasProject;
-  input('start-url').disabled = !idle || !hasProject;
-  input('capture-screenshots').disabled = !idle || !hasProject;
-  show('screenshot-help', input('capture-screenshots').checked);
-  text('record-hint', recording ? 'Recording is live. Use the browser, then stop here to review the journey.' : hasScenario ? 'Starting again creates a new recording. Save and export this journey first if you want to keep it.' : 'A browser opens for your journey. Interactions appear here as you go.');
-  enable('add-assertion', idle && hasScenario);
-  enable('save-scenario', idle && hasScenario && dirty);
-  text('assertion-count', String(assertions.length));
-  show('assertions-empty', assertions.length === 0);
-  $('assertion-list').querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button').forEach(control => { control.disabled = !idle; });
-  text('save-status', !hasScenario ? 'Record a journey to define assertions.' : dirty ? 'Unsaved changes' : 'Saved with this journey');
-  const codexMode = select('generator-mode').value === 'codex';
-  text('codex-status', !state ? 'Connect the desktop app to check Codex.' : !codexMode ? 'Portable fallback uses the recorded journey and your assertions.' : state.codex.available ? `Codex available${state.codex.version ? ` · ${state.codex.version}` : ''}` : 'Codex is unavailable. Install/sign in to Codex, or choose the portable fallback.');
-  show('model-field', codexMode);
-  enable('generator-mode', idle);
-  enable('model-name', idle);
-  enable('generate', idle && hasScenario && assertions.length > 0 && (!codexMode || !!state?.codex.available));
-  $('generate').title = !hasScenario ? 'Record a journey first' : assertions.length === 0 ? 'Add at least one assertion to define success' : codexMode && !state?.codex.available ? 'Choose the portable generator or make Codex available' : 'Save assertions and generate a test';
-  text('generate', state?.phase === 'generating' || pending === 'Generate test' ? 'Generating…' : 'Generate test ↗');
-  ['test-command', 'command-executable', 'command-args', 'json-args', 'use-json-args', 'verify-repeats'].forEach(id => enable(id, idle));
-  input('command-args').disabled = !idle || input('use-json-args').checked;
-  $<HTMLTextAreaElement>('json-args').disabled = !idle || !input('use-json-args').checked;
-  enable('verify', idle && !!state?.generation);
-  text('verify', state?.phase === 'verifying' ? 'Verifying…' : 'Run verification →');
-  ['export-bundle', 'reveal-workspace'].forEach(id => enable(id, idle && !!state?.generation));
-  enable('rail-reveal', idle && hasProject);
-  show('cancel-run', state?.phase === 'generating' || state?.phase === 'verifying');
+  enable('stop-recording', !!recording && !pending);
+  enable('tab-expectations', !recording);
+  enable('tab-details', !recording);
+  show('editor-meta', !recording);
+  enable('empty-record', ready && !!state?.project);
+  enable('export-suite', ready && !!state?.cases.length);
+  enable('save-case', ready && !!draft && caseDirty);
+  enable('discard-case', ready && caseDirty);
+  show('discard-case', caseDirty);
+  for (const id of ['add-assertion', 'empty-assertion', 'delete-case'])
+    enable(id, ready && !!draft);
+  document.querySelectorAll<HTMLButtonElement>('[data-duplicate]').forEach((node) => {
+    node.disabled = !ready || !draft;
+  });
+  ['case-name', 'case-kind', 'case-priority', 'case-tags', 'case-enabled'].forEach((id) =>
+    enable(id, ready && !!draft),
+  );
+  text('save-status', caseDirty ? 'Unsaved changes' : 'All changes saved');
+  $('save-status').classList.toggle('dirty', caseDirty);
+  show('nav-dirty', caseDirty);
+  document.querySelectorAll<HTMLInputElement>('[data-select-case]').forEach((node) => {
+    const item = state?.cases.find((item) => item.id === node.dataset.selectCase);
+    node.disabled =
+      !ready || !item?.enabled || (!selectedIds.has(item.id) && selectedIds.size >= 20);
+    node.checked = !!item && selectedIds.has(item.id);
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-case-id]').forEach((node) => {
+    node.disabled = !ready;
+  });
+  enable('select-all-cases', ready && visibleCases().some((item) => item.enabled));
+  const eligible = visibleCases().filter((item) => item.enabled);
+  input('select-all-cases').checked =
+    eligible.length > 0 && eligible.every((item) => selectedIds.has(item.id));
+  input('select-all-cases').indeterminate =
+    eligible.some((item) => selectedIds.has(item.id)) && !input('select-all-cases').checked;
+  enable('clear-selection', ready);
+  show('clear-selection', currentPage === 'cases' && selectedIds.size > 0);
+  const ids = generationIds();
+  const settings = state?.settings ?? defaults;
+  const available = settings.provider === 'portable' || !!state?.[settings.provider].available;
+  const candidateCases = ids.map((id) =>
+    draft?.id === id ? draft : state?.cases.find((item) => item.id === id),
+  );
+  const canGenerate =
+    ids.length > 0 &&
+    candidateCases.every((item) => item?.enabled && item.scenario.assertions.length > 0);
+  show('generate', !!state?.project && currentPage !== 'results' && !recording);
+  enable('generate', ready && canGenerate && available);
+  text(
+    'generate',
+    state?.phase === 'generating'
+      ? 'Generating…'
+      : ids.length > 1
+        ? `Generate ${ids.length} cases ↗`
+        : 'Generate test ↗',
+  );
+  $('generate').title = !ids.length
+    ? 'Select cases to generate'
+    : !canGenerate
+      ? 'Every selected case must be enabled and have at least one expectation'
+      : !available
+        ? `${providers[settings.provider]} is unavailable. Open Agent settings to choose an available generator.`
+        : 'Save the case and generate tests';
+  const inFlight = state?.phase === 'generating' || state?.phase === 'verifying';
+  show('cancel-run', inFlight);
   enable('cancel-run', !cancelling);
   text('cancel-run', cancelling ? 'Cancelling…' : 'Cancel run');
-  $('activity-indicator').classList.toggle('busy', busy);
-  text('activity-current', pending || (state && state.phase !== 'idle' ? phaseLabels[state.phase] : state?.activity.at(-1)?.message) || (connected ? 'Ready when you are.' : 'Open JourneyProof in the desktop app to connect.'));
-  const stage = state?.verification ? 4 : state?.generation || state?.phase === 'generating' ? 3 : state?.scenario?.events.length && !recording ? 2 : hasProject ? 1 : 0;
-  document.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(button => {
-    const index = Number(button.dataset.step);
-    button.disabled = index === 0 ? !idle : index === 1 ? !hasProject : index < 4 ? !hasScenario : !state?.generation;
-    if (index === stage) button.setAttribute('aria-current', 'step'); else button.removeAttribute('aria-current');
-    button.classList.toggle('reached', index < stage);
-  });
-  if (state?.error && state.error !== dismissedError && !localError) reportError(state.error, 'The workspace needs attention', 'Review Activity for details. Check the project, URL, or command, then retry the relevant action.');
-  renderLedger();
-  renderGeneration();
-  renderVerification();
-  renderActivity();
-}
-
-function renderLedger() {
-  const events = state?.scenario?.events ?? [];
-  text('event-count', String(events.length));
-  text('ledger-meta', events.length ? `${events.length} interaction${events.length === 1 ? '' : 's'} recorded` : state?.phase === 'recording' ? 'Listening to the browser…' : 'Waiting for your first interaction');
-  show('ledger-empty', events.length === 0);
-  const signature = JSON.stringify(events);
-  if (eventSignature !== signature) {
-    eventSignature = signature;
-    const list = $('event-ledger');
-    const fragment = document.createDocumentFragment();
-    const icons: Record<string, string> = { navigate: '↗', click: '↖', fill: 'T', check: '☑', uncheck: '□', select: '⌄', press: '↵', popup: '▱', note: '·' };
-    events.forEach(event => {
-      const row = element('li', 'event-row');
-      const detail = element('div');
-      detail.append(element('h3', '', event.label || event.action));
-      const locator = event.locators[0];
-      if (locator) {
-        const location = element('p', 'event-detail');
-        location.append(element('code', '', `${locator.strategy}: ${locator.value}${locator.name ? ` · ${locator.name}` : ''}`));
-        detail.append(location);
-      }
-      if (event.value !== undefined) detail.append(element('p', 'event-detail', event.redacted ? 'Value redacted' : `Value: ${event.value}`));
-      if (event.url) detail.append(element('p', 'event-detail', event.url));
-      if (event.frameSelectors?.length) detail.append(element('p', 'event-detail', `Frame: ${event.frameSelectors.join(' → ')}`));
-      if (event.screenshot) detail.append(element('p', 'event-detail', 'Screenshot captured'));
-      event.warnings?.forEach(warning => detail.append(element('p', 'event-warning', warning)));
-      row.append(element('span', 'event-number', String(event.sequence).padStart(2, '0')), element('span', 'event-icon', icons[event.action] || '·'), detail, element('time', 'event-time', formatTime(event.timestamp)));
-      fragment.append(row);
-    });
-    list.replaceChildren(fragment);
+  show('phase-chip', !!pending || !!inFlight);
+  text('phase-chip', pending || (state ? phases[state.phase] : ''));
+  $('activity-indicator').classList.toggle(
+    'busy',
+    !!pending || (!!state && state.phase !== 'idle'),
+  );
+  let footerTitle = 'Ready when you are.';
+  let footerDetail = 'Tests are created in a separate copy.';
+  if (currentPage === 'cases' && state?.project) {
+    footerTitle = selectedIds.size
+      ? `${selectedIds.size} of 20 cases selected`
+      : 'Choose the outcomes to test';
+    footerDetail = selectedIds.size
+      ? `${providers[settings.provider]} will generate your selected cases.`
+      : 'Select cases above, or record a new flow.';
   }
-  renderWarnings('scenario-warnings', state?.scenario?.warnings ?? []);
+  if (currentPage === 'editor') {
+    footerTitle = caseDirty
+      ? 'Your changes will be saved before generation'
+      : draft?.scenario.assertions.length
+        ? 'Ready to turn intent into a test'
+        : 'Define what success looks like';
+    footerDetail = draft?.scenario.assertions.length
+      ? `${providers[settings.provider]} · ${plural(draft.scenario.events.length, 'step')} · ${plural(draft.scenario.assertions.length, 'expectation')}`
+      : 'Add at least one expectation before generating.';
+  }
+  if (ids.length && !available && currentPage !== 'results')
+    footerDetail = `${providers[settings.provider]} is unavailable. Choose a generator in Agent settings.`;
+  if (currentPage === 'results') {
+    footerTitle = state?.verification
+      ? capitalize(state.verification.status)
+      : state?.generation
+        ? 'Generated and ready for review'
+        : 'Your evidence starts here';
+    footerDetail = state?.generation
+      ? 'Code, verification, and export belong to this generated run.'
+      : 'Generate a case to see the result.';
+  }
+  if (pending || (state?.phase && state.phase !== 'idle')) {
+    footerTitle = pending || phases[state!.phase];
+    footerDetail = state?.activity.at(-1)?.message || 'Tests are created in a separate copy.';
+  }
+  text('footer-title', footerTitle);
+  text('footer-detail', footerDetail);
+  for (const id of ['export-bundle', 'reveal-workspace', 'verify'])
+    enable(id, ready && !!state?.generation?.files.length);
+  enable('save-settings', ready && settingsDirty);
+  enable('discard-settings', ready && settingsDirty);
+  show('discard-settings', settingsDirty);
+  enable('preview-prompt', ready && !!draft && !!state?.project);
+  enable('add-context-files', ready && !!state?.project);
+  text('settings-save-status', settingsDirty ? 'Unsaved settings' : 'All settings saved');
+  enable('close-record', !pending);
+  enable('cancel-record', !pending);
+  enable('confirm-accept', !pending);
+  enable('confirm-cancel', !pending);
 }
-
-function renderWarnings(id: string, warnings: string[]) {
-  const node = $(id);
-  node.hidden = warnings.length === 0;
-  if (node.dataset.value === JSON.stringify(warnings)) return;
-  node.dataset.value = JSON.stringify(warnings);
-  const list = element('ul');
-  warnings.forEach(warning => list.append(element('li', '', warning)));
-  node.replaceChildren(element('strong', '', 'Review notes'), list);
+function visibleCases() {
+  const query = input('case-search').value.toLocaleLowerCase().trim();
+  return (state?.cases ?? []).filter(
+    (item) =>
+      (filter === 'all' || item.kind === filter) &&
+      (!query ||
+        `${item.name} ${item.tags.join(' ')} ${item.kind}`.toLocaleLowerCase().includes(query)),
+  );
 }
-
-function renderAssertions() {
-  const container = $('assertion-list');
-  container.replaceChildren();
-  assertions.forEach((assertion, index) => {
-    const card = element('article', 'assertion-card');
-    const header = element('div', 'assertion-topline');
-    const remove = element('button', 'icon-button', '×');
-    remove.type = 'button';
-    remove.setAttribute('aria-label', `Delete assertion ${index + 1}`);
-    remove.addEventListener('click', () => {
-      assertions.splice(index, 1); dirty = true; renderAssertions(); render();
-      const next = $('assertion-list').querySelector<HTMLButtonElement>('.icon-button');
-      (next ?? $('add-assertion')).focus();
-    });
-    header.append(element('strong', '', `ASSERTION ${String(index + 1).padStart(2, '0')}`), remove);
-    card.append(header);
-    const field = (labelText: string, key: string, control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) => {
-      const wrapper = element('div', 'field');
-      const label = element('label', '', labelText);
-      control.id = `assertion-${index}-${key}`;
-      label.htmlFor = control.id;
-      wrapper.append(label, control);
-      return wrapper;
-    };
-    const changed = () => { dirty = true; render(); };
-    const kinds = element('select');
-    [['text', 'Text'], ['visible', 'Visible'], ['url', 'URL'], ['custom', 'Custom intent']].forEach(([value, label]) => kinds.add(new Option(label, value)));
-    kinds.value = assertion.kind;
-    kinds.addEventListener('change', () => {
-      assertion.kind = kinds.value as Assertion['kind'];
-      if (assertion.kind === 'text' || assertion.kind === 'visible') assertion.locator ??= { strategy: 'testId', value: '' };
-      else delete assertion.locator;
-      dirty = true; renderAssertions(); render(); $(`assertion-${index}-kind`).focus();
-    });
-    card.append(field('Kind', 'kind', kinds));
-    if (assertion.kind === 'text' || assertion.kind === 'visible') {
-      assertion.locator ??= { strategy: 'testId', value: '' };
-      const locator = assertion.locator;
-      const strategy = element('select');
-      [['testId', 'Test ID'], ['role', 'Role'], ['label', 'Label'], ['placeholder', 'Placeholder'], ['text', 'Text'], ['css', 'CSS']].forEach(([value, label]) => strategy.add(new Option(label, value)));
-      strategy.value = locator.strategy;
-      strategy.addEventListener('change', () => { locator.strategy = strategy.value as LocatorSpec['strategy']; if (locator.strategy !== 'role') delete locator.name; dirty = true; renderAssertions(); render(); $(`assertion-${index}-strategy`).focus(); });
-      const value = element('input'); value.value = locator.value; value.placeholder = 'e.g. total'; value.autocomplete = 'off'; value.spellcheck = false;
-      value.addEventListener('input', () => { locator.value = value.value; changed(); });
-      const grid = element('div', 'assertion-grid'); grid.append(field('Locator strategy', 'strategy', strategy), field('Locator value', 'value', value)); card.append(grid);
-      if (locator.strategy === 'role') {
-        const name = element('input'); name.value = locator.name ?? ''; name.placeholder = 'e.g. Add to cart';
-        name.addEventListener('input', () => { locator.name = name.value || undefined; changed(); });
-        card.append(field('Accessible name (optional)', 'accessible-name', name));
+function renderLibrary() {
+  const cases = state?.cases ?? [];
+  for (const kind of ['positive', 'negative', 'boundary'] as const)
+    text(`${kind}-count`, String(cases.filter((item) => item.kind === kind).length));
+  text('all-count', String(cases.length));
+  document
+    .querySelectorAll<HTMLButtonElement>('[data-filter]')
+    .forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.filter === filter)));
+  const visible = visibleCases();
+  text(
+    'library-count',
+    `${plural(visible.length, 'case')}${visible.length !== cases.length ? ` of ${cases.length}` : ''} · ${cases.filter((item) => item.enabled).length} enabled`,
+  );
+  show('library-empty', !cases.length);
+  show('search-empty', cases.length > 0 && !visible.length);
+  const signature = JSON.stringify([visible, [...selectedIds]]);
+  if (signature === listSignature) return;
+  listSignature = signature;
+  // Search itself is outside this subtree; typing never recreates its input.
+  const nodes = visible.map((item) => {
+    const row = el(
+      'div',
+      `case-row${selectedIds.has(item.id) ? ' selected' : ''}${item.enabled ? '' : ' disabled-case'}`,
+    );
+    row.setAttribute('role', 'listitem');
+    row.dataset.testid = 'case-row';
+    row.dataset.caseRow = item.id;
+    const main = el('div', 'case-row-main');
+    const checkbox = el('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.selectCase = item.id;
+    checkbox.setAttribute('aria-label', `Select ${item.name}`);
+    checkbox.checked = selectedIds.has(item.id);
+    checkbox.addEventListener('change', () => {
+      if (!idle()) return;
+      if (checkbox.checked && selectedIds.size >= 20) {
+        checkbox.checked = false;
+        toast('You can select up to 20 cases at a time.');
+        return;
       }
-    }
-    const expected = element('input'); expected.value = assertion.expected;
-    expected.placeholder = assertion.kind === 'text' ? 'e.g. $90.00' : assertion.kind === 'url' ? 'Expected URL' : assertion.kind === 'visible' ? 'Visible (no value needed)' : 'Describe the expected outcome';
-    expected.addEventListener('input', () => { assertion.expected = expected.value; changed(); });
-    card.append(field(assertion.kind === 'visible' ? 'Expected (optional)' : 'Expected', 'expected', expected));
-    const description = element('textarea'); description.rows = 2; description.value = assertion.description; description.placeholder = 'Why this outcome matters';
-    description.addEventListener('input', () => { assertion.description = description.value; changed(); });
-    card.append(field('Description', 'description', description));
-    container.append(card);
+      checkbox.checked ? selectedIds.add(item.id) : selectedIds.delete(item.id);
+      row.classList.toggle('selected', checkbox.checked);
+      renderControls();
+      // Keep this checkbox mounted and focused after a selection.
+      listSignature = JSON.stringify([visibleCases(), [...selectedIds]]);
+    });
+    const button = el('button', 'case-open');
+    button.dataset.caseId = item.id;
+    button.dataset.testid = 'open-case';
+    button.append(
+      el('strong', '', item.name),
+      el(
+        'small',
+        '',
+        `${item.enabled ? (item.tags.length ? item.tags.join(' · ') : 'No tags') : 'Disabled'} · ${plural(item.scenario.assertions.length, 'expectation')}`,
+      ),
+    );
+    button.title = item.name;
+    button.addEventListener('click', () =>
+      navigate(async () => {
+        await callState(() => api!.selectCase({ id: item.id }));
+        currentPage = 'editor';
+        editorTab = 'steps';
+      }),
+    );
+    main.append(checkbox, button);
+    row.append(
+      main,
+      el('span', `badge ${item.kind}`, capitalize(item.kind)),
+      el('span', `priority ${item.priority}`, capitalize(item.priority)),
+      el('span', 'step-count', String(item.scenario.events.length)),
+    );
+    return row;
   });
+  $('case-list').replaceChildren(...nodes);
 }
-
-function renderGeneration() {
+function control<K extends 'input' | 'textarea' | 'select'>(
+  tag: K,
+  id: string,
+  value: string,
+  onChange: (value: string) => void,
+  options?: [string, string][],
+) {
+  const node = mutable(el(tag));
+  node.id = id;
+  if (node instanceof HTMLSelectElement)
+    options?.forEach(([value, label]) => node.add(new Option(label, value)));
+  node.value = value;
+  if (node instanceof HTMLInputElement) node.autocomplete = 'off';
+  node.addEventListener(tag === 'select' ? 'change' : 'input', () => {
+    if (!idle()) return;
+    onChange(node.value);
+    changedCase();
+  });
+  return node;
+}
+function field(label: string, node: HTMLElement) {
+  const wrapper = el('label', 'field', label);
+  wrapper.append(node);
+  return wrapper;
+}
+function renderEditor(force = false) {
+  const recording = state?.phase === 'recording';
+  const scenario = recording ? state?.scenario : draft?.scenario;
+  show('recording-notice', recording);
+  text('live-event-count', plural(scenario?.events.length ?? 0, 'step'));
+  text('event-count', String(scenario?.events.length ?? 0));
+  text('assertion-count', String(recording ? 0 : (draft?.scenario.assertions.length ?? 0)));
+  text('recorded-url', scenario?.startUrl || '');
+  $('recorded-url').title = scenario?.startUrl || '';
+  show('steps-empty', !scenario?.events.length);
+  show('assertions-empty', !draft?.scenario.assertions.length);
+  text(
+    'editor-heading',
+    recording ? scenario?.name || 'New recording' : draft?.name || 'New recording',
+  );
+  updateSemantics();
+  const signature = JSON.stringify(recording ? scenario : draft);
+  if (!force && (caseDirty || editorSignature === signature) && !recording) return;
+  if (editorSignature === signature && !force) return;
+  editorSignature = signature;
+  if (draft) {
+    input('case-name').value = draft.name;
+    select('case-kind').value = draft.kind;
+    select('case-priority').value = draft.priority;
+    input('case-tags').value = draft.tags.join(', ');
+    input('case-enabled').checked = draft.enabled;
+  }
+  renderSteps(scenario?.events ?? []);
+  renderAssertions();
+  renderWarnings('scenario-warnings', scenario?.warnings ?? []);
+}
+function renderSteps(events: InteractionEvent[]) {
+  const openIds = new Set(
+    Array.from($('event-ledger').querySelectorAll<HTMLDetailsElement>('details[open]')).map(
+      (node) => node.dataset.eventId,
+    ),
+  );
+  const symbols: Record<InteractionEvent['action'], string> = {
+    navigate: '↗',
+    click: '↖',
+    fill: 'T',
+    check: '✓',
+    uncheck: '□',
+    select: '⌄',
+    press: '↵',
+    popup: '↗',
+    note: '·',
+  };
+  $('event-ledger').replaceChildren(
+    ...events.map((event, index) => {
+      const card = el('details', 'step-card');
+      card.dataset.eventId = event.id;
+      card.dataset.testid = 'recorded-step';
+      card.open = openIds.has(event.id);
+      const summary = el('summary');
+      const detail = el('div', 'step-summary');
+      const heading = el('strong', '', event.label || capitalize(event.action));
+      const caption = el(
+        'small',
+        '',
+        `${capitalize(event.action)}${event.value !== undefined ? ` · ${event.redacted ? 'Value redacted' : event.value}` : event.locators[0] ? ` · ${event.locators[0].value}` : event.url ? ` · ${event.url}` : ''}`,
+      );
+      detail.append(heading, caption);
+      summary.append(
+        el('span', 'step-number', String(index + 1).padStart(2, '0')),
+        el('span', 'step-symbol', symbols[event.action]),
+        detail,
+        el('span', 'step-chevron', '›'),
+      );
+      const body = el('div', 'step-body');
+      const label = control('input', `step-${index}-label`, event.label, (value) => {
+        event.label = value;
+        heading.textContent = value || capitalize(event.action);
+      });
+      body.append(field('Step label', label));
+      if (event.action === 'navigate' || event.action === 'popup')
+        body.append(
+          field(
+            'Destination URL',
+            control('input', `step-${index}-url`, event.url, (value) => {
+              event.url = value;
+              if (index === 0 && draft && event.action === 'navigate')
+                draft.scenario.startUrl = value;
+            }),
+          ),
+        );
+      if (['fill', 'select', 'press'].includes(event.action) || event.value !== undefined) {
+        const value = control(
+          'input',
+          `step-${index}-value`,
+          event.redacted ? '' : (event.value ?? ''),
+          (value) => {
+            event.value = value;
+            event.redacted = false;
+            caption.textContent = `${capitalize(event.action)} · ${value}`;
+          },
+        );
+        value.dataset.testid = 'step-value';
+        value.placeholder = event.redacted ? 'Enter a safe test value' : 'Input value';
+        body.append(field(event.action === 'press' ? 'Key to press' : 'Input value', value));
+        if (event.redacted)
+          body.append(
+            el(
+              'p',
+              'field-hint',
+              'The recorded value was redacted. Enter a safe test value before generation.',
+            ),
+          );
+      }
+      if (!['navigate', 'popup', 'note'].includes(event.action) || event.locators.length) {
+        const header = el('div', 'locator-heading');
+        header.append(el('span', '', 'LOCATORS · in preference order'));
+        const add = mutable(el('button', 'text-button', '+ Add locator'));
+        add.type = 'button';
+        add.setAttribute('aria-label', `Add locator to step ${index + 1}`);
+        const locatorList = el('div');
+        const fillLocators = () => {
+          locatorList.replaceChildren(
+            ...event.locators.map((locator, locatorIndex) => {
+              const grid = el('div', 'locator-grid');
+              grid.dataset.testid = 'step-locator';
+              const prefix = `step-${index}-locator-${locatorIndex}`;
+              const name = control('input', `${prefix}-name`, locator.name ?? '', (value) => {
+                locator.name = value || undefined;
+              });
+              name.placeholder = 'Optional';
+              const strategy = control(
+                'select',
+                `${prefix}-strategy`,
+                locator.strategy,
+                (value) => {
+                  locator.strategy = value as LocatorSpec['strategy'];
+                  name.parentElement!.hidden = value !== 'role';
+                  if (value !== 'role') delete locator.name;
+                },
+                strategies,
+              );
+              const value = control('input', `${prefix}-value`, locator.value, (value) => {
+                locator.value = value;
+              });
+              value.dataset.testid = 'locator-value';
+              const nameField = field('Accessible name', name);
+              nameField.hidden = locator.strategy !== 'role';
+              const remove = mutable(el('button', 'icon-button', '×'));
+              remove.type = 'button';
+              remove.setAttribute(
+                'aria-label',
+                `Remove locator ${locatorIndex + 1} from step ${index + 1}`,
+              );
+              remove.addEventListener('click', () => {
+                if (!idle()) return;
+                event.locators.splice(locatorIndex, 1);
+                changedCase();
+                fillLocators();
+                add.focus();
+              });
+              grid.append(
+                field('Strategy', strategy),
+                field('Locator value', value),
+                nameField,
+                remove,
+              );
+              return grid;
+            }),
+          );
+          renderControls();
+        };
+        add.addEventListener('click', () => {
+          if (!idle()) return;
+          event.locators.push({ strategy: 'testId', value: '' });
+          changedCase();
+          fillLocators();
+          input(`step-${index}-locator-${event.locators.length - 1}-value`).focus();
+        });
+        header.append(add);
+        body.append(header, locatorList);
+        fillLocators();
+      }
+      if (event.screenshot)
+        body.append(el('p', 'field-hint', 'Screenshot captured with this step.'));
+      if (event.frameSelectors?.length)
+        body.append(el('p', 'field-hint', `Inside frame: ${event.frameSelectors.join(' → ')}`));
+      event.warnings?.forEach((warning) => body.append(el('p', 'field-hint', warning)));
+      card.append(summary, body);
+      return card;
+    }),
+  );
+}
+function renderAssertions() {
+  const assertions = state?.phase === 'recording' ? [] : (draft?.scenario.assertions ?? []);
+  $('assertion-list').replaceChildren(
+    ...assertions.map((assertion, index) => {
+      const card = el('article', 'assertion-card');
+      card.dataset.assertionId = assertion.id;
+      card.dataset.testid = 'expectation';
+      const header = el('div', 'assertion-topline');
+      const remove = mutable(el('button', 'icon-button', '×'));
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `Delete expectation ${index + 1}`);
+      remove.addEventListener('click', () => {
+        if (!idle() || !draft) return;
+        draft.scenario.assertions.splice(index, 1);
+        changedCase();
+        renderAssertions();
+        renderControls();
+        $('add-assertion').focus();
+      });
+      header.append(el('strong', '', `EXPECTATION ${String(index + 1).padStart(2, '0')}`), remove);
+      card.append(header);
+      const kind = control(
+        'select',
+        `assertion-${index}-kind`,
+        assertion.kind,
+        (value) => {
+          assertion.kind = value as Assertion['kind'];
+          if (value === 'text' || value === 'visible')
+            assertion.locator ??= { strategy: 'testId', value: '' };
+          else delete assertion.locator;
+          renderAssertions();
+          renderControls();
+          $(`assertion-${index}-kind`).focus();
+        },
+        [
+          ['text', 'Text equals'],
+          ['visible', 'Element is visible'],
+          ['url', 'URL equals'],
+          ['custom', 'Custom outcome'],
+        ],
+      );
+      card.append(field('Expectation type', kind));
+      if (assertion.kind === 'text' || assertion.kind === 'visible') {
+        assertion.locator ??= { strategy: 'testId', value: '' };
+        const locator = assertion.locator;
+        const grid = el('div', 'assertion-locator-grid');
+        const name = control(
+          'input',
+          `assertion-${index}-accessible-name`,
+          locator.name ?? '',
+          (value) => {
+            locator.name = value || undefined;
+          },
+        );
+        name.placeholder = 'e.g. Apply coupon';
+        const nameField = field('Accessible name (optional)', name);
+        nameField.hidden = locator.strategy !== 'role';
+        const strategy = control(
+          'select',
+          `assertion-${index}-strategy`,
+          locator.strategy,
+          (value) => {
+            locator.strategy = value as LocatorSpec['strategy'];
+            nameField.hidden = value !== 'role';
+            if (value !== 'role') delete locator.name;
+          },
+          strategies,
+        );
+        const value = control('input', `assertion-${index}-value`, locator.value, (value) => {
+          locator.value = value;
+        });
+        value.placeholder = 'e.g. coupon-message';
+        value.dataset.testid = 'expectation-locator';
+        grid.append(field('Locator strategy', strategy), field('Locator value', value));
+        card.append(grid, nameField);
+      }
+      if (assertion.kind !== 'visible') {
+        const expected = control(
+          'input',
+          `assertion-${index}-expected`,
+          assertion.expected,
+          (value) => {
+            assertion.expected = value;
+          },
+        );
+        expected.dataset.testid = 'expectation-expected';
+        expected.placeholder =
+          assertion.kind === 'url'
+            ? 'https://example.com/success'
+            : assertion.kind === 'custom'
+              ? 'Describe the expected behavior'
+              : 'e.g. This coupon is not valid';
+        card.append(field('Expected outcome', expected));
+      } else
+        card.append(
+          el(
+            'p',
+            'field-hint',
+            'Passes when the located element is visible. Use a validation-message locator for a negative case.',
+          ),
+        );
+      const description = control(
+        'textarea',
+        `assertion-${index}-description`,
+        assertion.description,
+        (value) => {
+          assertion.description = value;
+        },
+      );
+      description.rows = 2;
+      description.placeholder = 'What this expectation proves';
+      card.append(field('Description', description));
+      return card;
+    }),
+  );
+  text('assertion-count', String(assertions.length));
+  show('assertions-empty', assertions.length === 0);
+}
+function changedSettings() {
+  if (!idle()) return;
+  settingsDirty = true;
+  invalidatePrompt();
+  renderProvider();
+  renderControls();
+}
+function renderSettings() {
+  const signature = JSON.stringify(settingsDraft);
+  if (!settingsDirty && settingsSignature !== signature) {
+    settingsSignature = signature;
+    select('generator-mode').value = settingsDraft.provider;
+    input('model-name').value = settingsDraft.model;
+    select('agent-effort').value = settingsDraft.effort;
+    input('agent-timeout').value = String(settingsDraft.timeoutSeconds);
+    input('claude-budget').value = String(settingsDraft.claudeBudgetUsd ?? 1);
+    $<HTMLTextAreaElement>('agent-instructions').value = settingsDraft.instructions;
+  }
+  renderProvider();
+  const paths = state?.project?.examples.map((example) => example.path) ?? [];
+  const context = JSON.stringify([state?.project?.id, paths]);
+  if (contextSignature !== context) {
+    contextSignature = context;
+    $('context-paths').replaceChildren(
+      ...paths.map((path) => {
+        const label = el('label', 'context-path');
+        const checkbox = mutable(el('input'));
+        checkbox.type = 'checkbox';
+        checkbox.dataset.contextPath = path;
+        checkbox.setAttribute('aria-label', `Include ${path}`);
+        checkbox.addEventListener('change', () => {
+          if (!idle()) return;
+          const excluded = new Set(settingsDraft.excludedContextPaths);
+          checkbox.checked ? excluded.delete(path) : excluded.add(path);
+          settingsDraft.excludedContextPaths = [...excluded];
+          changedSettings();
+          updateContextCount();
+        });
+        label.append(checkbox, el('span', '', path));
+        return label;
+      }),
+    );
+  }
+  document.querySelectorAll<HTMLInputElement>('[data-context-path]').forEach((node) => {
+    node.checked = !settingsDraft.excludedContextPaths.includes(node.dataset.contextPath!);
+  });
+  updateContextCount();
+  show('context-empty', !paths.length);
+  text(
+    'context-empty',
+    state?.project
+      ? 'No context files yet. Add tests, page objects, helpers, or config from your project.'
+      : 'Open a project to see its context files.',
+  );
+}
+function updateContextCount() {
+  const paths = state?.project?.examples.map((example) => example.path) ?? [];
+  text(
+    'context-count',
+    `${paths.filter((path) => !settingsDraft.excludedContextPaths.includes(path)).length}/${paths.length}`,
+  );
+}
+function renderProvider() {
+  const provider = settingsDraft.provider;
+  show('agent-options', provider !== 'portable');
+  show('claude-budget-field', provider === 'claude');
+  const status = provider === 'portable' ? undefined : state?.[provider];
+  text(
+    'agent-status',
+    provider === 'portable'
+      ? 'Always available'
+      : status?.available
+        ? `Available${status.version ? ` · ${status.version}` : ''}`
+        : `${providers[provider]} is unavailable`,
+  );
+  $('agent-status').className =
+    provider === 'portable' || status?.available ? 'available' : 'unavailable';
+  text(
+    'provider-help',
+    provider === 'portable'
+      ? 'Uses your recorded steps and supported expectations directly. No model or agent account is needed.'
+      : provider === 'claude'
+        ? 'Uses your local Claude setup. Time and spending limits apply separately to each case in a batch.'
+        : 'Uses your local Codex setup. The time limit applies separately to each case in a batch.',
+  );
+}
+function renderWarnings(id: string, warnings: string[]) {
+  show(id, warnings.length > 0);
+  const node = $(id);
+  const signature = JSON.stringify(warnings);
+  if (node.dataset.signature === signature) return;
+  node.dataset.signature = signature;
+  const list = el('ul');
+  warnings.forEach((warning) => list.append(el('li', '', warning)));
+  node.replaceChildren(el('strong', '', 'Review notes'), list);
+}
+function renderResults() {
   const generation = state?.generation;
-  enable('tab-generated', !!generation);
+  show('generation-empty', !generation);
+  show('generation-content', !!generation);
   text('file-count', String(generation?.files.length ?? 0));
-  if (!generation) { generationIdentity = ''; if (activeTab === 'generated') setTab('ledger'); return; }
-  const identity = JSON.stringify(generation);
-  if (generationIdentity === identity) return;
-  const isNew = generationIdentity !== identity;
-  generationIdentity = identity;
-  selectedFile = 0;
-  text('generation-summary', generation.summary);
-  text('generation-workspace', generation.workspace);
-  renderWarnings('generation-warnings', generation.warnings);
-  const files = $('file-list'); files.replaceChildren();
-  generation.files.forEach((file, index) => {
-    const button = element('button', '', file.path); button.type = 'button';
-    button.addEventListener('click', () => { selectedFile = index; showFile(); }); files.append(button);
-  });
-  showFile();
-  if (isNew) setTab('generated');
+  const signature = JSON.stringify(generation);
+  if (generationSignature !== signature) {
+    generationSignature = signature;
+    selectedFile = 0;
+    text('generation-summary', generation?.summary ?? '');
+    text('generation-provider', generation ? providers[generation.provider] : '');
+    renderWarnings('generation-warnings', generation?.warnings ?? []);
+    $('file-list').replaceChildren(
+      ...(generation?.files ?? []).map((file, index) => {
+        const button = el('button', '', file.path);
+        button.dataset.fileIndex = String(index);
+        button.addEventListener('click', () => {
+          selectedFile = index;
+          showFile();
+        });
+        return button;
+      }),
+    );
+    showFile();
+  }
+  const commands = JSON.stringify([state?.project?.id, state?.project?.commands]);
+  if (commands !== commandsSignature) {
+    commandsSignature = commands;
+    select('test-command').replaceChildren();
+    (state?.project?.commands ?? []).forEach((command, index) =>
+      select('test-command').add(
+        new Option(
+          command.label || `${command.executable} ${command.args.join(' ')}`,
+          String(index),
+        ),
+      ),
+    );
+    select('test-command').add(new Option('Custom command…', 'custom'));
+    select('test-command').value = state?.project?.commands.length ? '0' : 'custom';
+    updateCommand();
+  }
+  const verification = state?.verification;
+  const verificationKey = JSON.stringify(verification);
+  if (verificationKey !== verificationSignature) {
+    verificationSignature = verificationKey;
+    text(
+      'verification-statement',
+      verification?.statement || 'No verification yet. Generate a test, then run it here.',
+    );
+    $('verification-summary').replaceChildren();
+    $('verification-runs').replaceChildren();
+    if (verification) {
+      $('verification-summary').append(
+        el('span', `badge ${verification.status}`, capitalize(verification.status)),
+        el(
+          'code',
+          '',
+          `${verification.command.executable} ${verification.command.args.map((arg) => JSON.stringify(arg)).join(' ')}`,
+        ),
+      );
+      $('verification-runs').replaceChildren(
+        ...verification.runs.map((run) => {
+          const details = el('details', 'run-details');
+          details.open = run.status !== 'passed';
+          details.dataset.runIndex = String(run.index);
+          details.dataset.testid = 'verification-run';
+          const summary = el('summary');
+          summary.append(
+            el('strong', '', `Run ${run.index}`),
+            el('span', `badge ${run.status}`, capitalize(run.status)),
+            el(
+              'span',
+              'run-duration',
+              `${(run.durationMs / 1000).toFixed(1)}s · exit ${run.exitCode ?? '—'}`,
+            ),
+          );
+          details.append(
+            summary,
+            el('pre', 'run-output', run.output || 'No command output was captured.'),
+          );
+          return details;
+        }),
+      );
+    }
+  }
+  const history = state?.history ?? [];
+  text('history-count', String(history.length));
+  show('history-empty', !history.length);
+  const historyKey = JSON.stringify(history);
+  if (historyKey !== historySignature) {
+    historySignature = historyKey;
+    $('history-list').replaceChildren(
+      ...[...history]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((run) => {
+          const card = el('article', 'history-card');
+          card.dataset.historyId = run.id;
+          card.dataset.testid = 'history-row';
+          const body = el('div');
+          body.append(
+            el('h3', '', run.caseNames.join(', ') || 'Test generation'),
+            el('p', '', run.summary),
+            el(
+              'small',
+              '',
+              `${formatDate(run.createdAt)} · ${providers[run.provider]} · ${plural(run.fileCount, 'file')}`,
+            ),
+          );
+          card.append(body, el('span', `badge ${run.status}`, capitalize(run.status)));
+          return card;
+        }),
+    );
+  }
 }
-
 function showFile() {
   const file = state?.generation?.files[selectedFile];
-  text('code-path', file?.path ?? 'No generated files returned');
-  text('code-content', file?.content ?? 'The generator returned no files. Check the review notes and Activity before trying again.');
+  text('code-path', file?.path ?? 'No files returned');
+  text(
+    'code-content',
+    file?.content ?? 'No generated files were returned. Check the review notes and Activity.',
+  );
   enable('copy-code', !!file);
-  $('file-list').querySelectorAll('button').forEach((button, index) => button.setAttribute('aria-pressed', String(index === selectedFile)));
+  document
+    .querySelectorAll<HTMLButtonElement>('[data-file-index]')
+    .forEach((button) =>
+      button.setAttribute(
+        'aria-pressed',
+        String(Number(button.dataset.fileIndex) === selectedFile),
+      ),
+    );
 }
-
-function renderVerification() {
-  const verification = state?.verification;
-  enable('tab-verification', !!state?.generation);
-  if (!verification) {
-    verificationIdentity = '';
-    text('verification-statement', 'Run the generated test to collect evidence. No verification result yet.');
-    $('verification-summary').replaceChildren(); $('verification-runs').replaceChildren();
-    if (activeTab === 'verification' && !state?.generation) setTab('ledger');
-    return;
-  }
-  const identity = JSON.stringify(verification);
-  if (verificationIdentity === identity) return;
-  verificationIdentity = identity;
-  text('verification-statement', verification.statement);
-  $('verification-summary').replaceChildren(element('span', `verification-status ${verification.status}`, verification.status.replaceAll('-', ' ')), element('code', '', `${verification.command.executable} ${verification.command.args.map(arg => JSON.stringify(arg)).join(' ')}`));
-  const runs = $('verification-runs'); runs.replaceChildren();
-  verification.runs.forEach(run => {
-    const details = element('details', 'run-details'); details.open = run.status !== 'passed';
-    const summary = element('summary');
-    summary.append(element('strong', '', `Run ${run.index}`), element('span', `verification-status ${run.status}`, run.status.replaceAll('-', ' ')), element('span', 'run-duration', `${(run.durationMs / 1000).toFixed(1)}s · exit ${run.exitCode ?? '—'}`));
-    details.append(summary, element('pre', 'run-output', run.output || 'No command output was captured.')); runs.append(details);
-  });
-  setTab('verification');
-}
-
 function renderActivity() {
-  const log = $('activity-log');
   const entries = state?.activity ?? [];
+  const log = $('activity-log');
   const signature = JSON.stringify(entries);
-  if (log.dataset.value === signature) return;
-  log.dataset.value = signature;
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 35;
-  const fragment = document.createDocumentFragment();
-  entries.slice(-100).forEach(entry => {
-    const row = element('div', 'activity-entry'); row.append(element('time', '', formatTime(entry.time)), element('p', '', entry.message)); fragment.append(row);
-  });
-  if (!entries.length) fragment.append(element('p', 'field-hint', 'Activity from your local workspace will appear here.'));
-  log.replaceChildren(fragment);
+  if (log.dataset.signature === signature) return;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.dataset.signature = signature;
+  log.replaceChildren(
+    ...entries.slice(-100).map((entry) => {
+      const row = el('div', 'activity-entry');
+      row.append(el('time', '', formatDate(entry.time, true)), el('p', '', entry.message));
+      return row;
+    }),
+  );
+  if (!entries.length) log.append(el('p', 'field-hint', 'Workspace activity will appear here.'));
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
-
-function formatTime(value: string) {
+function formatDate(value: string, timeOnly = false) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  if (Number.isNaN(date.getTime())) return value;
+  return timeOnly
+    ? date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 }
-
-function setTab(tab: typeof activeTab) {
-  activeTab = tab;
-  (['ledger', 'generated', 'verification'] as const).forEach(name => {
-    show(`panel-${name}`, tab === name);
-    $(`tab-${name}`).setAttribute('aria-selected', String(tab === name));
-    $(`tab-${name}`).tabIndex = tab === name ? 0 : -1;
+function setSubTab(group: 'editor' | 'result', tab: string) {
+  const attr = group === 'editor' ? 'data-editor-tab' : 'data-result-tab';
+  document.querySelectorAll<HTMLButtonElement>(`[${attr}]`).forEach((button) => {
+    const active = button.getAttribute(attr) === tab;
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+    $<HTMLElement>(button.getAttribute('aria-controls')!).hidden = !active;
   });
 }
-
-function updateCommand() {
-  const custom = select('test-command').value === 'custom';
-  show('custom-command', custom);
-  const command = state?.project?.commands[Number(select('test-command').value)];
-  text('command-preview', !custom && command ? `${command.executable} ${command.args.map(arg => JSON.stringify(arg)).join(' ')}` : '');
-}
-
-function parseArgs(value: string): string[] {
-  const result: string[] = []; let token = ''; let quote = ''; let started = false; let escaped = false;
-  for (const char of value) {
-    if (escaped) { token += char; escaped = false; started = true; continue; }
-    if (char === '\\' && quote !== "'") { escaped = true; started = true; continue; }
-    if (quote) { if (char === quote) quote = ''; else token += char; started = true; continue; }
-    if (char === '"' || char === "'") { quote = char; started = true; continue; }
-    if (/\s/.test(char)) { if (started) { result.push(token); token = ''; started = false; } } else { token += char; started = true; }
+function focusField(id: string, tab?: typeof editorTab) {
+  if (tab) {
+    currentPage = 'editor';
+    editorTab = tab;
+    renderNavigation();
   }
-  if (quote || escaped) throw new Error('An argument has an unfinished quote or escape. Close it, or use the JSON argument array in Advanced.');
-  if (started) result.push(token);
+  // Validation can finish while a save action still has the form disabled.
+  window.setTimeout(() => {
+    const node = document.getElementById(id);
+    node?.closest('details')?.setAttribute('open', '');
+    node?.focus();
+  }, 0);
+}
+function invalid(message: string, id: string, tab?: typeof editorTab): never {
+  focusField(id, tab);
+  throw new Error(message);
+}
+function validateCase(): TestCase {
+  if (!draft) throw new Error('Open a case first.');
+  const result = clone(draft);
+  result.name = result.name.trim();
+  result.scenario.name = result.name;
+  if (!result.name || result.name.length > 120)
+    invalid('Give the case a name between 1 and 120 characters.', 'case-name', 'details');
+  result.tags = [...new Set(result.tags.map((tag) => tag.trim()).filter(Boolean))];
+  if (result.tags.length > 12 || result.tags.some((tag) => tag.length > 40))
+    invalid('Use up to 12 tags, with no more than 40 characters per tag.', 'case-tags', 'details');
+  for (const [index, event] of result.scenario.events.entries()) {
+    if (event.action === 'navigate' || event.action === 'popup') {
+      try {
+        const url = new URL(event.url);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      } catch {
+        invalid(
+          `Step ${index + 1} needs a complete HTTP or HTTPS URL.`,
+          `step-${index}-url`,
+          'steps',
+        );
+      }
+    }
+    if (!['navigate', 'popup', 'note'].includes(event.action) && !event.locators.length)
+      invalid(`Add a locator to step ${index + 1}.`, `step-${index}-label`, 'steps');
+    for (const [locatorIndex, locator] of event.locators.entries()) {
+      if (!locator.value.trim())
+        invalid(
+          `Locator ${locatorIndex + 1} in step ${index + 1} needs a value.`,
+          `step-${index}-locator-${locatorIndex}-value`,
+          'steps',
+        );
+    }
+  }
+  for (const [index, assertion] of result.scenario.assertions.entries()) {
+    if (
+      (assertion.kind === 'text' || assertion.kind === 'visible') &&
+      !assertion.locator?.value.trim()
+    )
+      invalid(
+        `Expectation ${index + 1} needs a locator value.`,
+        `assertion-${index}-value`,
+        'expectations',
+      );
+    if (assertion.kind === 'url' && !assertion.expected.trim())
+      invalid(
+        `Expectation ${index + 1} needs an expected outcome.`,
+        `assertion-${index}-expected`,
+        'expectations',
+      );
+    if (assertion.kind === 'custom' && !assertion.expected.trim() && !assertion.description.trim())
+      invalid(
+        `Describe the outcome for expectation ${index + 1}.`,
+        `assertion-${index}-description`,
+        'expectations',
+      );
+    assertion.source = 'user';
+  }
+  result.updatedAt = new Date().toISOString();
   return result;
 }
-
+async function saveDraft(force = false) {
+  if (!draft || (!caseDirty && !force)) return;
+  const saved = validateCase();
+  const next = await callState(() => api!.saveCase(saved));
+  caseDirty = false;
+  retainedDrafts.delete(saved.id);
+  draft = clone(
+    state?.cases.find((item) => item.id === saved.id) ??
+      next.cases.find((item) => item.id === saved.id) ??
+      saved,
+  );
+  editorSignature = '';
+  renderEditor(true);
+  invalidatePrompt();
+}
+function resetDraft() {
+  if (draft) retainedDrafts.delete(draft.id);
+  draft = activeCase() ? clone(activeCase()!) : undefined;
+  caseDirty = false;
+  editorSignature = '';
+  invalidatePrompt();
+  render();
+}
+function validateSettings(): AgentSettings {
+  const value = clone(settingsDraft);
+  const time = Number(input('agent-timeout').value);
+  if (!Number.isInteger(time) || time < 30 || time > 1800)
+    invalid('Time per case must be a whole number from 30 to 1,800 seconds.', 'agent-timeout');
+  value.timeoutSeconds = time;
+  if (value.instructions.length > 8000)
+    invalid('Custom instructions must be 8,000 characters or fewer.', 'agent-instructions');
+  const budget = input('claude-budget').value.trim() ? Number(input('claude-budget').value) : 1;
+  if (!Number.isFinite(budget) || budget < 0.01 || budget > 20)
+    invalid('Budget per case must be between $0.01 and $20.', 'claude-budget');
+  value.claudeBudgetUsd = budget;
+  value.model = value.model.trim();
+  return value;
+}
+async function saveSettingsDraft() {
+  if (!settingsDirty) return;
+  const saved = validateSettings();
+  const next = await callState(() => api!.saveSettings(saved));
+  settingsDirty = false;
+  settingsDraft = clone(state?.settings ?? next.settings);
+  settingsSignature = '';
+  invalidatePrompt();
+  renderSettings();
+}
+function resetSettings() {
+  settingsDirty = false;
+  settingsDraft = clone(state?.settings ?? defaults);
+  settingsSignature = '';
+  invalidatePrompt();
+  renderSettings();
+  renderControls();
+}
+function askConfirm(
+  title: string,
+  description: string,
+  accept: string,
+  action: () => void,
+  cancel = 'Keep editing',
+) {
+  confirmAction = action;
+  text('confirm-heading', title);
+  text('confirm-description', description);
+  text('confirm-accept', accept);
+  text('confirm-cancel', cancel);
+  dialog('confirm-dialog').showModal();
+  $('confirm-cancel').focus();
+}
+function navigate(action: () => void | Promise<void>) {
+  if (!idle()) {
+    // Reading results and activity is allowed during a run; case mutations remain locked.
+    if (!caseDirty) {
+      void action();
+      renderNavigation();
+      renderControls();
+    }
+    return;
+  }
+  if (caseDirty) {
+    try {
+      validateCase();
+    } catch (error) {
+      askConfirm(
+        'Keep your changes?',
+        `${error instanceof Error ? error.message : error} Fix this before saving, or explicitly discard your changes to continue.`,
+        'Discard & continue',
+        () => {
+          resetDraft();
+          navigate(action);
+        },
+      );
+      return;
+    }
+    void perform('Saving case', async () => {
+      await saveDraft();
+      await action();
+    });
+  } else {
+    // Use the same action lock for native selections and project changes.
+    void perform('Opening view', async () => {
+      await action();
+    });
+  }
+}
+function openRecord() {
+  if (!idle() || !state?.project) return;
+  navigate(() => {
+    input('record-name').value = '';
+    input('start-url').value =
+      state?.scenario?.startUrl ||
+      draft?.scenario.startUrl ||
+      (state?.project?.isDemo ? 'http://127.0.0.1:4318' : '');
+    input('capture-screenshots').checked = false;
+    show('screenshot-help', false);
+    show('record-error', false);
+    dialog('record-dialog').showModal();
+    window.setTimeout(() => input('record-name').focus(), 0);
+  });
+}
+function openSettings() {
+  if (dialog('settings-dialog').open) return;
+  savedFocus = document.activeElement as HTMLElement;
+  renderSettings();
+  renderControls();
+  show('settings-error', false);
+  dialog('settings-dialog').showModal();
+}
+function closeSettings() {
+  if (settingsDirty) {
+    if (!idle()) return;
+    try {
+      validateSettings();
+    } catch (error) {
+      askConfirm(
+        'Keep these settings?',
+        `${error instanceof Error ? error.message : error} Correct the value, or discard your changes to close settings.`,
+        'Discard & close',
+        () => {
+          resetSettings();
+          dialog('settings-dialog').close();
+        },
+      );
+      return;
+    }
+    void perform('Saving settings', async () => {
+      await saveSettingsDraft();
+      dialog('settings-dialog').close();
+    });
+  } else dialog('settings-dialog').close();
+}
+function updateCommand() {
+  show('custom-command', select('test-command').value === 'custom');
+}
 function getCommand(): TestCommand {
   if (select('test-command').value !== 'custom') {
     const command = state?.project?.commands[Number(select('test-command').value)];
-    if (!command) throw new Error('Select a suggested command or enter a custom executable.');
-    return structuredClone(command);
+    if (!command) throw new Error('Select a test command.');
+    return clone(command);
   }
   const executable = input('command-executable').value.trim();
-  if (!executable) { input('command-executable').focus(); throw new Error('Enter an executable, such as npm, npx, or mvn. Put its arguments in the separate field.'); }
-  let args: string[];
-  if (input('use-json-args').checked) {
-    let parsed: unknown;
-    try { parsed = JSON.parse($<HTMLTextAreaElement>('json-args').value); } catch { throw new Error('Arguments must be valid JSON, for example ["run", "test"].'); }
-    if (!Array.isArray(parsed) || !parsed.every(arg => typeof arg === 'string')) throw new Error('JSON arguments must be an array containing only strings.');
-    args = parsed;
-  } else args = parseArgs(input('command-args').value);
+  if (!executable) invalid('Enter the executable, such as npm, npx, or mvn.', 'command-executable');
+  let args: unknown;
+  try {
+    args = JSON.parse(input('command-args').value);
+  } catch {
+    invalid('Arguments must be a JSON array, such as ["run", "test"].', 'command-args');
+  }
+  if (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string'))
+    invalid('Arguments must be an array of strings, such as ["run", "test"].', 'command-args');
   return { executable, args, label: 'Custom command' };
 }
 
-function scenarioDraft() {
-  const name = input('scenario-name').value.trim();
-  if (!name) { input('scenario-name').focus(); throw new Error('Give this scenario a name before saving or generating.'); }
-  for (const [index, assertion] of assertions.entries()) {
-    if ((assertion.kind === 'text' || assertion.kind === 'visible') && !assertion.locator?.value.trim()) { $(`assertion-${index}-value`).focus(); throw new Error(`Assertion ${index + 1} needs a locator value.`); }
-    if ((assertion.kind === 'text' || assertion.kind === 'url') && !assertion.expected.trim()) { $(`assertion-${index}-expected`).focus(); throw new Error(`Assertion ${index + 1} needs an expected value.`); }
-    if (assertion.kind === 'custom' && !assertion.description.trim() && !assertion.expected.trim()) { $(`assertion-${index}-description`).focus(); throw new Error(`Describe the expected outcome for assertion ${index + 1}.`); }
-  }
-  return { name, assertions: structuredClone(assertions) };
-}
-
-async function saveDraft() {
-  const draft = scenarioDraft();
-  const next = await api!.saveScenario(draft);
-  dirty = false;
-  receive(next);
-  return next;
-}
-
-['open-project', 'rail-project'].forEach(id => $(id).addEventListener('click', () => { if (api) void perform('Open project', () => api.chooseProject(), 'Choose a readable local repository folder.'); }));
-$('load-demo').addEventListener('click', () => { if (api) void perform('Load cart demo', () => api.loadDemo(), 'Check Activity for the demo setup error, then try loading the demo again.', true); });
-$('home-link').addEventListener('click', event => { event.preventDefault(); $('main-content').scrollTo({ top: 0, behavior: 'smooth' }); });
-$('scenario-nav').addEventListener('click', () => { setTab('ledger'); $('main-content').scrollTo({ top: 0, behavior: 'smooth' }); });
-input('scenario-name').addEventListener('input', () => { dirty = !!state?.scenario; render(); });
-input('capture-screenshots').addEventListener('change', () => show('screenshot-help', input('capture-screenshots').checked));
-$('record-form').addEventListener('submit', event => {
+// Navigation and all native actions use the existing window.journey contract.
+$('home-link').addEventListener('click', (event) => {
   event.preventDefault();
-  if (!api || pending || state?.phase !== 'idle') return;
-  const url = input('start-url').value.trim();
-  const name = input('scenario-name').value.trim();
-  try { const parsed = new URL(url); if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(); } catch { reportError('Enter a full HTTP or HTTPS starting URL, for example http://localhost:3000.', 'Check the starting URL', 'Start your application before recording.'); input('start-url').focus(); return; }
-  if (!name) { reportError('Enter a name for this journey.', 'Name your scenario'); input('scenario-name').focus(); return; }
-  const captureScreenshots = input('capture-screenshots').checked;
-  void perform('Start recording', () => api.startRecording({ url, name, captureScreenshots }), 'Check that the URL is reachable and the browser is installed. See Activity for details.');
-});
-$('stop-recording').addEventListener('click', () => { if (api) void perform('Stop recording', () => api.stopRecording(), 'Try stopping again. Any captured events remain visible in the ledger.'); });
-$('add-assertion').addEventListener('click', () => {
-  assertions.push({ id: crypto.randomUUID(), kind: 'text', locator: { strategy: 'testId', value: '' }, expected: '', description: '', source: 'user' });
-  dirty = true; renderAssertions(); render(); $(`assertion-${assertions.length - 1}-value`).focus();
-});
-$('save-scenario').addEventListener('click', () => { if (api) void perform('Save scenario', saveDraft, 'Check the assertion fields and try saving again.'); });
-select('generator-mode').addEventListener('change', render);
-$('generate').addEventListener('click', () => {
-  if (!api) return;
-  void perform('Generate test', async () => {
-    if (!assertions.length) throw new Error('Add at least one assertion before generating a test.');
-    await saveDraft();
-    const mode = select('generator-mode').value as 'codex' | 'portable';
-    const model = input('model-name').value.trim();
-    return api.generate({ mode, ...(mode === 'codex' && model ? { model } : {}) });
-  }, 'Review Activity and generation notes. Check Codex setup or choose the portable fallback, then generate again.');
-});
-select('test-command').addEventListener('change', updateCommand);
-input('use-json-args').addEventListener('change', render);
-$('verify').addEventListener('click', () => {
-  if (!api) return;
-  void perform('Run verification', async () => {
-    const command = getCommand();
-    const repeats = Number(select('verify-repeats').value);
-    if (![1, 2, 3].includes(repeats)) throw new Error('Choose between one and three verification runs.');
-    setTab('verification');
-    return api.verify({ command, repeats });
-  }, 'Check the executable and arguments. Dependencies and the application must be available in the isolated workspace; inspect the run output for details.');
-});
-$('export-bundle').addEventListener('click', () => {
-  if (api) void perform('Export bundle', async () => {
-    const path = await api.exportBundle();
-    text('export-result', path ? `Exported to ${path}` : 'Export cancelled. Your workspace is still available.');
-    show('export-result', true);
-  }, 'Choose a writable destination and export again.');
-});
-['rail-reveal', 'reveal-workspace'].forEach(id => $(id).addEventListener('click', () => { if (api) void perform('Reveal workspace', () => api.revealWorkspace(), 'Check that the workspace still exists, then try again.'); }));
-$('cancel-run').addEventListener('click', async () => {
-  if (!api || cancelling) return;
-  cancelling = true; render();
-  try { receive(await api.cancelRun()); } catch (error) { reportError(error, 'Cancellation could not finish', 'Check Activity and try cancelling again.'); } finally { cancelling = false; render(); }
-});
-$('copy-code').addEventListener('click', async () => {
-  const content = state?.generation?.files[selectedFile]?.content;
-  if (content === undefined) return;
-  try { await navigator.clipboard.writeText(content); text('copy-code', 'Copied'); window.setTimeout(() => text('copy-code', 'Copy'), 1600); } catch (error) { reportError(error, 'Could not copy the file', 'Select the code and press ⌘C, or export the bundle.'); }
-});
-$('dismiss-error').addEventListener('click', () => { dismissedError = state?.error ?? ''; localError = ''; show('error-banner', false); });
-$('retry-button').addEventListener('click', () => retry?.());
-$('activity-toggle').addEventListener('click', () => {
-  const expanded = $('activity-toggle').getAttribute('aria-expanded') !== 'true';
-  $('activity-toggle').setAttribute('aria-expanded', String(expanded)); show('activity-log', expanded);
-  if (expanded) $('activity-log').scrollTop = $('activity-log').scrollHeight;
-});
-document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => {
-  button.addEventListener('click', () => setTab(button.dataset.tab as typeof activeTab));
-  button.addEventListener('keydown', event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]')).filter(tab => !tab.disabled);
-    const index = tabs.indexOf(button);
-    const target = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1)! : tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
-    target.click(); target.focus();
+  navigate(() => {
+    currentPage = 'cases';
   });
 });
-document.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(button => button.addEventListener('click', () => {
-  switch (button.dataset.step) {
-    case '0': $('rail-project').click(); break;
-    case '1': setTab('ledger'); input('start-url').focus(); $('main-content').scrollTo({ top: 0, behavior: 'smooth' }); break;
-    case '2': $('assertions-section').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('add-assertion').focus({ preventScroll: true }); break;
-    case '3': if (state?.generation) setTab('generated'); $('generation-section').scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
-    case '4': setTab('verification'); $('verify-section').scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+document.querySelectorAll<HTMLButtonElement>('[data-page]').forEach((button) =>
+  button.addEventListener('click', () => {
+    const page = button.dataset.page as typeof currentPage;
+    navigate(() => {
+      currentPage = page;
+    });
+  }),
+);
+['open-project', 'rail-project'].forEach((id) =>
+  $(id).addEventListener('click', () => {
+    if (!idle()) return;
+    navigate(async () => {
+      await saveSettingsDraft();
+      await callState(() => api!.chooseProject());
+      currentPage = 'cases';
+    });
+  }),
+);
+$('load-demo').addEventListener('click', () => {
+  if (!idle()) return;
+  navigate(async () => {
+    await callState(() => api!.loadDemo());
+    currentPage = 'cases';
+    toast('Three cases, ready to explore. Select them to generate a suite.');
+  });
+});
+['record-button', 'empty-record'].forEach((id) => $(id).addEventListener('click', openRecord));
+['close-record', 'cancel-record'].forEach((id) =>
+  $(id).addEventListener('click', () => {
+    if (!pending) dialog('record-dialog').close();
+  }),
+);
+dialog('record-dialog').addEventListener('cancel', (event) => {
+  if (pending) event.preventDefault();
+});
+input('capture-screenshots').addEventListener('change', () =>
+  show('screenshot-help', input('capture-screenshots').checked),
+);
+$('record-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!idle()) return;
+  const url = input('start-url').value.trim();
+  const name = input('record-name').value.trim();
+  try {
+    if (!name || name.length > 120)
+      invalid('Enter a case name between 1 and 120 characters.', 'record-name');
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      invalid('Enter a complete HTTP or HTTPS starting URL.', 'start-url');
+    }
+  } catch (error) {
+    report(error, 'Check the recording details');
+    return;
   }
-}));
-window.addEventListener('beforeunload', () => unsubscribe?.());
-
-async function connect() {
-  if (!api) {
+  void perform('Starting recording', async () => {
+    await callState(() =>
+      api!.startRecording({
+        url,
+        name,
+        captureScreenshots: input('capture-screenshots').checked,
+      }),
+    );
+    dialog('record-dialog').close();
+    currentPage = 'editor';
+    editorTab = 'steps';
+  });
+});
+$('stop-recording').addEventListener('click', async () => {
+  if (!api || pending || state?.phase !== 'recording') return;
+  pending = 'Stopping recording';
+  renderControls();
+  try {
+    await callState(() => api.stopRecording());
+  } catch (error) {
+    report(error, 'Recording couldn’t stop');
+  } finally {
+    pending = '';
     render();
-    reportError('The native JourneyProof connection is unavailable.', 'Open JourneyProof on your Mac', 'Launch the Electron desktop app. This renderer needs its preload API to open folders, record, generate, and verify.');
+  }
+});
+input('case-search').addEventListener('input', () => {
+  renderLibrary();
+  renderControls();
+});
+document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((button) =>
+  button.addEventListener('click', () => {
+    filter = button.dataset.filter as typeof filter;
+    renderLibrary();
+    renderControls();
+  }),
+);
+$('clear-filters').addEventListener('click', () => {
+  filter = 'all';
+  input('case-search').value = '';
+  renderLibrary();
+  renderControls();
+  input('case-search').focus();
+});
+input('select-all-cases').addEventListener('change', () => {
+  if (!idle()) return;
+  const cases = visibleCases().filter((item) => item.enabled);
+  if (input('select-all-cases').checked) {
+    for (const item of cases) {
+      if (selectedIds.size >= 20) break;
+      selectedIds.add(item.id);
+    }
+    if (cases.some((item) => !selectedIds.has(item.id))) toast('Selected up to the 20-case limit.');
+  } else cases.forEach((item) => selectedIds.delete(item.id));
+  renderLibrary();
+  renderControls();
+});
+$('clear-selection').addEventListener('click', () => {
+  if (!idle()) return;
+  selectedIds.clear();
+  renderLibrary();
+  renderControls();
+});
+$('case-name').addEventListener('input', () => {
+  if (idle() && draft) {
+    draft.name = input('case-name').value;
+    changedCase();
+  }
+});
+$('case-kind').addEventListener('change', () => {
+  if (idle() && draft) {
+    draft.kind = select('case-kind').value as CaseKind;
+    changedCase();
+  }
+});
+$('case-priority').addEventListener('change', () => {
+  if (idle() && draft) {
+    draft.priority = select('case-priority').value as TestCase['priority'];
+    changedCase();
+  }
+});
+$('case-tags').addEventListener('input', () => {
+  if (idle() && draft) {
+    draft.tags = input('case-tags')
+      .value.split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    changedCase();
+  }
+});
+$('case-enabled').addEventListener('change', () => {
+  if (idle() && draft) {
+    draft.enabled = input('case-enabled').checked;
+    changedCase();
+  }
+});
+$('save-case').addEventListener(
+  'click',
+  () =>
+    void perform('Saving case', async () => {
+      await saveDraft();
+      toast('Case saved.');
+    }),
+);
+$('discard-case').addEventListener('click', () => {
+  if (idle())
+    askConfirm(
+      'Discard these changes?',
+      'This restores the last saved version of this case.',
+      'Discard changes',
+      () => {
+        resetDraft();
+        toast('Restored the saved case.');
+      },
+    );
+});
+function addAssertion() {
+  if (!idle() || !draft) return;
+  draft.scenario.assertions.push({
+    id: crypto.randomUUID(),
+    kind: 'text',
+    locator: { strategy: 'testId', value: '' },
+    expected: '',
+    description: '',
+    source: 'user',
+  });
+  changedCase();
+  editorTab = 'expectations';
+  renderAssertions();
+  renderNavigation();
+  renderControls();
+  input(`assertion-${draft.scenario.assertions.length - 1}-value`).focus();
+}
+['add-assertion', 'empty-assertion'].forEach((id) => $(id).addEventListener('click', addAssertion));
+$('review-expectations').addEventListener('click', () => {
+  editorTab = 'expectations';
+  renderNavigation();
+  $('tab-expectations').focus();
+});
+document.querySelectorAll<HTMLButtonElement>('[data-duplicate]').forEach((button) =>
+  button.addEventListener('click', () => {
+    if (!idle() || !draft) return;
+    const id = draft.id;
+    const kind = button.dataset.duplicate as CaseKind;
+    $<HTMLDetailsElement>('case-menu').open = false;
+    void perform('Duplicating case', async () => {
+      await saveDraft();
+      await callState(() => api!.duplicateCase({ id, kind }));
+      currentPage = 'editor';
+      editorTab = 'expectations';
+      toast(`${capitalize(kind)} copy created. Review its inputs and expectations.`);
+    });
+  }),
+);
+$('delete-case').addEventListener('click', () => {
+  if (!idle() || !draft) return;
+  const item = clone(draft);
+  $<HTMLDetailsElement>('case-menu').open = false;
+  askConfirm(
+    'Delete this case?',
+    `“${item.name}” will be removed from the library${caseDirty ? ', including your unsaved changes' : ''}. Other cases are unaffected.`,
+    'Delete case',
+    () => {
+      void perform('Deleting case', async () => {
+        await callState(() => api!.deleteCase({ id: item.id }));
+        retainedDrafts.delete(item.id);
+        selectedIds.delete(item.id);
+        if (draft?.id === item.id) {
+          caseDirty = false;
+          draft = undefined;
+          editorSignature = '';
+        }
+        currentPage = 'cases';
+        toast('Case deleted.');
+      });
+    },
+    'Keep case',
+  );
+});
+$('generate').addEventListener('click', () => {
+  if (!idle()) return;
+  const ids = generationIds();
+  void perform('Generating tests', async () => {
+    if (!ids.length || ids.length > 20)
+      throw new Error('Select between 1 and 20 cases to generate.');
+    // Persist edits before the service reads cases to construct its generation prompt.
+    await saveDraft(true);
+    await saveSettingsDraft();
+    for (const id of ids) {
+      const item = state?.cases.find((item) => item.id === id);
+      if (!item?.enabled) throw new Error('Every selected case must be enabled.');
+      if (!item.scenario.assertions.length)
+        throw new Error(`Add an expectation to “${item.name}” before generation.`);
+    }
+    const settings = state!.settings;
+    currentPage = 'results';
+    resultTab = 'generated';
+    renderNavigation();
+    await callState(() =>
+      api!.generate({
+        mode: settings.provider,
+        ...(settings.model ? { model: settings.model } : {}),
+        caseIds: ids,
+      }),
+    );
+    if (state?.generation?.files.length) toast('Tests generated. Review the code, then verify.');
+  });
+});
+$('import-suite').addEventListener('click', () => {
+  if (idle())
+    navigate(async () => {
+      await callState(() => api!.importSuite());
+      currentPage = 'cases';
+    });
+});
+$('export-suite').addEventListener(
+  'click',
+  () =>
+    void perform('Exporting suite', async () => {
+      await saveDraft();
+      const path = await api!.exportSuite();
+      if (path) toast(`Suite exported to ${path}`);
+    }),
+);
+$('results-to-cases').addEventListener('click', () =>
+  navigate(() => {
+    currentPage = 'cases';
+  }),
+);
+$('test-command').addEventListener('change', updateCommand);
+$('verify').addEventListener(
+  'click',
+  () =>
+    void perform('Running verification', async () => {
+      const command = getCommand();
+      const repeats = Number(select('verify-repeats').value);
+      if (![1, 2, 3].includes(repeats)) throw new Error('Choose between 1 and 3 runs.');
+      resultTab = 'verification';
+      renderNavigation();
+      await callState(() => api!.verify({ command, repeats }));
+    }),
+);
+$('export-bundle').addEventListener(
+  'click',
+  () =>
+    void perform('Exporting results', async () => {
+      const path = await api!.exportBundle();
+      if (path) {
+        text('export-result', `Exported to ${path}`);
+        show('export-result', true);
+        toast('Results exported.');
+      }
+    }),
+);
+$('reveal-workspace').addEventListener(
+  'click',
+  () => void perform('Opening workspace', () => api!.revealWorkspace()),
+);
+$('cancel-run').addEventListener('click', async () => {
+  if (!api || cancelling) return;
+  cancelling = true;
+  renderControls();
+  try {
+    await callState(() => api.cancelRun());
+  } catch (error) {
+    report(error, 'Cancellation couldn’t finish');
+  } finally {
+    cancelling = false;
+    render();
+  }
+});
+$('copy-code').addEventListener('click', async () => {
+  const file = state?.generation?.files[selectedFile];
+  if (!file) return;
+  try {
+    await navigator.clipboard.writeText(file.content);
+    toast('Code copied.');
+  } catch {
+    report('Select the code and press ⌘C, or export the results.', 'The code couldn’t be copied');
+  }
+});
+$('open-settings').addEventListener('click', openSettings);
+$('close-settings').addEventListener('click', closeSettings);
+dialog('settings-dialog').addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeSettings();
+});
+dialog('settings-dialog').addEventListener('close', () => savedFocus?.focus());
+select('generator-mode').addEventListener('change', () => {
+  settingsDraft.provider = select('generator-mode').value as AgentProvider;
+  changedSettings();
+});
+input('model-name').addEventListener('input', () => {
+  settingsDraft.model = input('model-name').value;
+  changedSettings();
+});
+select('agent-effort').addEventListener('change', () => {
+  settingsDraft.effort = select('agent-effort').value as AgentSettings['effort'];
+  changedSettings();
+});
+input('agent-timeout').addEventListener('input', () => {
+  settingsDraft.timeoutSeconds = Number(input('agent-timeout').value);
+  changedSettings();
+});
+input('claude-budget').addEventListener('input', () => {
+  settingsDraft.claudeBudgetUsd = Number(input('claude-budget').value);
+  changedSettings();
+});
+$('agent-instructions').addEventListener('input', () => {
+  settingsDraft.instructions = $<HTMLTextAreaElement>('agent-instructions').value;
+  changedSettings();
+});
+$('save-settings').addEventListener(
+  'click',
+  () =>
+    void perform('Saving settings', async () => {
+      await saveSettingsDraft();
+      toast('Agent settings saved.');
+    }),
+);
+$('discard-settings').addEventListener('click', () => {
+  if (idle()) {
+    resetSettings();
+    show('settings-error', false);
+    toast('Restored the saved settings.');
+  }
+});
+$('refresh-agents').addEventListener(
+  'click',
+  () =>
+    void perform('Checking agents', async () => {
+      await callState(() => api!.refreshAgents());
+      toast('Agent availability refreshed.');
+    }),
+);
+$('add-context-files').addEventListener(
+  'click',
+  () =>
+    void perform('Adding context files', async () => {
+      await saveSettingsDraft();
+      await callState(() => api!.chooseContextFiles());
+      invalidatePrompt();
+    }),
+);
+$('preview-prompt').addEventListener(
+  'click',
+  () =>
+    void perform('Preparing prompt preview', async () => {
+      await saveDraft(true);
+      await saveSettingsDraft();
+      const prompt = await api!.previewPrompt({ caseId: draft?.id });
+      text('prompt-preview', prompt);
+      show('prompt-preview', true);
+      text(
+        'prompt-help',
+        `Exact prompt for “${draft?.name ?? 'the active case'}”, using saved settings and included context.`,
+      );
+    }),
+);
+$('confirm-accept').addEventListener('click', () => {
+  const action = confirmAction;
+  confirmAction = undefined;
+  dialog('confirm-dialog').close();
+  action?.();
+});
+$('confirm-cancel').addEventListener('click', () => {
+  confirmAction = undefined;
+  dialog('confirm-dialog').close();
+});
+dialog('confirm-dialog').addEventListener('cancel', () => {
+  confirmAction = undefined;
+});
+$('dismiss-error').addEventListener('click', () => {
+  dismissedError = state?.error ?? '';
+  show('error-banner', false);
+});
+function toggleActivity(open: boolean) {
+  show('activity-panel', open);
+  $('activity-toggle').setAttribute('aria-expanded', String(open));
+  if (open) $('activity-log').scrollTop = $('activity-log').scrollHeight;
+}
+$('activity-toggle').addEventListener('click', () => toggleActivity($('activity-panel').hidden));
+$('close-activity').addEventListener('click', () => {
+  toggleActivity(false);
+  $('activity-toggle').focus();
+});
+for (const group of ['editor', 'result'] as const) {
+  const attr = group === 'editor' ? 'data-editor-tab' : 'data-result-tab';
+  document.querySelectorAll<HTMLButtonElement>(`[${attr}]`).forEach((button) => {
+    button.addEventListener('click', () => {
+      if (group === 'editor') editorTab = button.getAttribute(attr) as typeof editorTab;
+      else resultTab = button.getAttribute(attr) as typeof resultTab;
+      setSubTab(group, button.getAttribute(attr)!);
+    });
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(`[${attr}]`));
+      const index = tabs.indexOf(button);
+      const target =
+        event.key === 'Home'
+          ? tabs[0]
+          : event.key === 'End'
+            ? tabs[tabs.length - 1]
+            : tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
+      target.click();
+      target.focus();
+    });
+  });
+}
+document.addEventListener('keydown', (event) => {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (event.key === ',') {
+    event.preventDefault();
+    openSettings();
+  }
+  if (event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    if (dialog('settings-dialog').open) $('save-settings').click();
+    else if (caseDirty) $('save-case').click();
+  }
+  if (event.key.toLowerCase() === 'f' && !document.querySelector('dialog[open]')) {
+    event.preventDefault();
+    navigate(() => {
+      currentPage = 'cases';
+      window.setTimeout(() => input('case-search').focus(), 0);
+    });
+  }
+});
+document.addEventListener('click', (event) => {
+  if (event.target instanceof Node && !$('case-menu').contains(event.target))
+    $<HTMLDetailsElement>('case-menu').open = false;
+});
+window.addEventListener('beforeunload', () => unsubscribe?.());
+async function connect() {
+  render();
+  if (!api) {
+    report(
+      'Open Testloom in the desktop app to connect to your workspace.',
+      'Desktop connection unavailable',
+    );
     return;
   }
   try {
-    if (!unsubscribe) unsubscribe = api.onUpdate(next => { streamVersion++; receive(next); });
+    unsubscribe = api.onUpdate((next) => {
+      streamVersion++;
+      receive(next);
+    });
     const version = streamVersion;
     const initial = await api.getState();
     if (streamVersion === version) receive(initial);
-  } catch (error) { render(); reportError(error, 'Could not connect to the workspace', 'Retry the connection. If it still fails, restart the desktop app.', () => { void connect(); }); }
+  } catch (error) {
+    report(error, 'The workspace couldn’t connect');
+  }
 }
 void connect();
