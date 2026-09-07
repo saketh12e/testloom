@@ -6,7 +6,7 @@ Checked on **2026-09-07**, on **macOS 26.5.1 / Apple Silicon**. Electron **44.2.
 
 | Check | Observed result |
 | --- | --- |
-| `npm run check` | Formatting, TypeScript, **82 regression tests**, and the production build passed. |
+| `npm run check` | Formatting, TypeScript, **83 regression tests**, and the production build passed. |
 | `npm run test:suite` | Positive, negative, and boundary cases passed **2 healthy runs**. The unchanged positive test failed on the deliberate 5% discount defect: **$90.00 expected / $95.00 received**. Source unchanged. |
 | `npx tsx tests/batch.integration.ts` | **20 generated files / 20 discovered and passing tests** in one selected batch. |
 | `TESTLOOM_AGENT=codex npx tsx tests/agent.integration.ts` | The actual Codex CLI authored positive and negative cases. Both were discovered and passed **2 healthy runs**; the unchanged positive test detected the discount mutation. All explicit requirement IDs were retained. Original source digest unchanged. |

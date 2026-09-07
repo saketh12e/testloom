@@ -71,10 +71,14 @@ export class JourneyService extends EventEmitter {
       const saved = JSON.parse(await readFile(path.join(this.root, 'session.json'), 'utf8'));
       if (saved.workspaceRoot !== this.root) {
         const [savedFolder, currentFolder] = await Promise.all([
-          stat(saved.workspaceRoot),
+          stat(saved.workspaceRoot).catch(() => undefined),
           stat(this.root),
         ]);
-        if (savedFolder.dev !== currentFolder.dev || savedFolder.ino !== currentFolder.ino)
+        if (
+          !savedFolder ||
+          savedFolder.dev !== currentFolder.dev ||
+          savedFolder.ino !== currentFolder.ino
+        )
           throw new Error('Saved workspace location does not match.');
       }
       const restored: AppState = {

@@ -300,3 +300,24 @@ test('workspace aliases preserve an existing Mac library instead of creating rec
   assert.deepEqual(service.state.cases[0].scenario.assertions, scenario.assertions);
   await service.close();
 });
+
+test('a moved session with a missing old root keeps a recovery copy', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'testloom-moved-session-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const original = JSON.stringify({
+    workspaceRoot: path.join(root, 'no-longer-present'),
+    phase: 'idle',
+    scenario: demoCases()[0].scenario,
+    activity: [],
+    codex: { available: false },
+  });
+  await writeFile(path.join(root, 'session.json'), original);
+  const service = new JourneyService(root, '/unused');
+  await service.initialize();
+  assert.match(service.state.error!, /recovery copy/);
+  const { readdir } = await import('node:fs/promises');
+  const recovery = (await readdir(root)).find((p) => p.startsWith('session-recovery-'));
+  assert.ok(recovery);
+  assert.equal(await readFile(path.join(root, recovery), 'utf8'), original);
+  await service.close();
+});
