@@ -28,6 +28,8 @@ jobs:
       - run: npm ci
       - run: npm run browsers
       - run: npm run check
+      - name: Mac release ZIP and signature integrity
+        run: npm run dist:mac
       - name: Recorded journey and mutation verification
         run: npm run test:journey
       - name: Positive, negative and boundary suite verification

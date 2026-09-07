@@ -24,7 +24,7 @@ npm run test:suite
 npm run test:desktop
 ```
 
-`check` combines type checking, regression tests and the production build. The desktop check needs an interactive graphical Mac session. `npm run package:mac` builds a local app directory; `npm run dist:mac` builds a ZIP. Neither command establishes signing, notarization, clean-machine compatibility or publication.
+`check` combines formatting, type checking, regression tests and the production build. The desktop check needs an interactive graphical Mac session. `npm run package:mac` builds and verifies an ad-hoc signed local app directory; `npm run dist:mac` also extracts and verifies the resulting ZIP. Neither command establishes Developer ID trust, notarization, clean-machine compatibility or publication. [Mac installation help](docs/MAC-OPENING.md) explains the signing boundary.
 
 The independent cart fixture has its own lockfile:
 

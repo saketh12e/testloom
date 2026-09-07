@@ -1,4 +1,20 @@
-# Release validation — 0.2.0
+# Release validation
+
+## 0.2.1 packaging repair — 2026-09-07
+
+The v0.2.0 app failed `codesign --verify --deep --strict`: **code has no resources but signature indicates they must be present**. A recipient reported macOS's damaged-app alert. The earlier local app workflow did not test downloaded-app trust.
+
+For v0.2.1, the complete app bundle and nested code receive an ad-hoc signature with hardened runtime and the required Electron JIT/library entitlements. Verification passes before archiving and again on the app extracted from the release ZIP. The regression fixture rejects both an incomplete bundle signature and a changed sealed resource, including inside a ZIP.
+
+- **84 regression tests**, formatting, type checking and production build passed.
+- The rebuilt **packaged app passed the full desktop workflow**: 500 saved cases, three-case generation, repeated verification, recording and export, with zero renderer errors.
+- `codesign --verify --deep --strict` reports **valid on disk / satisfies its Designated Requirement**.
+- `spctl --assess --type execute` still reports **rejected**. This is not Developer ID signing or notarization. No valid signing identity was available on this Mac, and opening the quarantined download on a separate recipient Mac has not been verified.
+- CI now builds a Mac ZIP and runs the signature hooks. See [Mac installation help](MAC-OPENING.md) for the remaining per-app approval requirement.
+
+The previous version's functional evidence follows; live Codex and Java generation were not rerun for this packaging-only repair.
+
+## 0.2.0 functional validation
 
 Checked on **2026-09-07**, on **macOS 26.5.1 / Apple Silicon**. Electron **44.2.0**; Node **22.22.3**; Playwright TypeScript **1.63.0**; Playwright Java **1.62.0**; Temurin **17.0.20.1**; Maven **3.9.16**. Codex CLI **0.153.4**; Claude Code CLI **2.1.116**.
 

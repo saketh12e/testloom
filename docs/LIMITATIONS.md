@@ -1,6 +1,6 @@
 # Limitations
 
-Testloom v0.2 is an **unsigned Apple Silicon developer preview**. It is not Apple Developer signed or notarized. The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
+Testloom v0.2.1 is an **ad-hoc signed Apple Silicon developer preview**. It is not Apple Developer signed or notarized. Gatekeeper may still block it; see [Mac installation help](MAC-OPENING.md). The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
 
 ## Recording and requirements
 

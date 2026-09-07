@@ -1,6 +1,6 @@
 # Getting started with Testloom
 
-Testloom v0.2 is an unsigned Apple Silicon developer preview. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
+Testloom v0.2.1 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
 
 ## Install and launch
 
@@ -12,7 +12,7 @@ npm run browsers
 npm start
 ```
 
-For a downloaded app, use the v0.2 Apple Silicon asset when available in [Releases](https://github.com/saketh12e/testloom/releases). Unzip it and move Testloom.app to Applications. macOS may require **System Settings → Privacy & Security → Open Anyway** because the preview is not Apple Developer signed or notarized. Keep system-wide protections enabled. [Migration](MIGRATION.md) explains existing JourneyProof installations.
+For a downloaded app, use the v0.2.1 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.2.1). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
 
 For the downloaded app, install Node.js 20.19+ and its recording/test browser once:
 
