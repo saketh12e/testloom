@@ -6,13 +6,14 @@ Checked on **2026-09-07**, on **macOS 26.5.1 / Apple Silicon**. Electron **44.2.
 
 | Check | Observed result |
 | --- | --- |
-| `npm run check` | Formatting, TypeScript, **81 regression tests**, and the production build passed. |
+| `npm run check` | Formatting, TypeScript, **82 regression tests**, and the production build passed. |
 | `npm run test:suite` | Positive, negative, and boundary cases passed **2 healthy runs**. The unchanged positive test failed on the deliberate 5% discount defect: **$90.00 expected / $95.00 received**. Source unchanged. |
 | `npx tsx tests/batch.integration.ts` | **20 generated files / 20 discovered and passing tests** in one selected batch. |
 | `TESTLOOM_AGENT=codex npx tsx tests/agent.integration.ts` | The actual Codex CLI authored positive and negative cases. Both were discovered and passed **2 healthy runs**; the unchanged positive test detected the discount mutation. All explicit requirement IDs were retained. Original source digest unchanged. |
 | `npx tsx tests/java.integration.ts` with the documented JDK/Maven environment | A real browser recording plus negative/boundary examples compiled into **3 Java/JUnit tests**. All passed on the healthy cart; the unchanged positive test failed on $90.00 versus $95.00. The shipped Java dependency version was used. Original Java and cart source digests unchanged. |
 | `npm run test:desktop` | Real Electron UI: edit an expired-coupon variant, duplicate it, save Claude controls, preview the prompt, select/generate 3 cases, verify twice, and export matching test bytes and verification hashes. Then record a fresh 5-event journey, author its requirement, generate and verify twice. Import **500 total cases**, search, and confirm the **20-case selection cap**. **Zero renderer errors.** |
 | Packaged app | **Passed the same real desktop workflow against the packaged `.app`**: 500 cases, editing, generation, verification, import/export, recording, and zero renderer errors. |
+| Existing Mac upgrade | The rebuilt app reopened the existing v1 session with all **12 actions and original requirements preserved**, one migrated case, the new output path, and no startup error. Workspace aliases are compared by directory identity. |
 | Claude adapter | Structured-response, error, output-size, timeout, cancellation, flag and context tests passed. **No successful live Claude generation is claimed.** The installed CLI reports signed in, but direct Anthropic requests return **HTTP 401**; this Mac's saved third-party model route did not complete within the bounded attempt. Renew/configure a working Claude Code account/route, then run the opt-in integration below. Testloom does not change account settings. |
 
 The desktop screenshots in `assets/` are captured from actual application states. Temporary toast notifications are hidden in documentation screenshots. No backend state is mocked. The desktop test substitutes only native file dialogs to choose its own temporary import/export files.

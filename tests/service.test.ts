@@ -272,3 +272,31 @@ test('explicit context selection rejects outside-project and credential files', 
   await assert.rejects(service.addContextFiles([path.join(source, '.env')]), /Credential/);
   await service.close();
 });
+
+test('workspace aliases preserve an existing Mac library instead of creating recovery state', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'testloom-alias-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const physical = path.join(root, 'physical'),
+    alias = path.join(root, 'alias');
+  await mkdir(physical);
+  const { symlink } = await import('node:fs/promises');
+  await symlink(physical, alias);
+  const scenario = demoCases()[0].scenario;
+  await writeFile(
+    path.join(physical, 'session.json'),
+    JSON.stringify({
+      workspaceRoot: physical,
+      phase: 'idle',
+      scenario,
+      activity: [],
+      codex: { available: false },
+    }),
+  );
+  const service = new JourneyService(alias, '/unused');
+  await service.initialize();
+  assert.equal(service.state.error, undefined);
+  assert.equal(service.state.cases.length, 1);
+  assert.equal(service.state.workspaceRoot, alias);
+  assert.deepEqual(service.state.cases[0].scenario.assertions, scenario.assertions);
+  await service.close();
+});

@@ -12,7 +12,7 @@ The rename does not change the MIT license.
 
 Quit the old app and back up its data before upgrading. Testloom checks the legacy `JourneyProof` and `journeyproof` folders under Electron's Application Support directory for `workspace/session.json` and reuses the first matching location. It does not intentionally create a second library when a recognized legacy session exists.
 
-A saved v1 session with recorded events and no cases is wrapped as an editable positive case. Its existing assertions remain user-authored requirements. This is session migration, not a promise that every old exported file can be imported as a v2 suite.
+Data-folder aliases, including capitalization differences on macOS, are matched by directory identity. A saved v1 session with recorded events and no cases is wrapped as an editable positive case. Its existing assertions remain user-authored requirements. This is session migration, not a promise that every old exported file can be imported as a v2 suite.
 
 `TESTLOOM_DATA_DIR` can explicitly choose an app data directory; the older `JOURNEYPROOF_DATA_DIR` is still accepted. The new variable takes precedence if both are set. These overrides name the user-data directory containing `workspace`, not the workspace subfolder itself. Changing the location does not copy data automatically. If an expected library is missing, check the selected data location and canonical project folder before recording more work.
 

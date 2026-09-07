@@ -69,9 +69,21 @@ export class JourneyService extends EventEmitter {
     const fresh = structuredClone(this.state);
     try {
       const saved = JSON.parse(await readFile(path.join(this.root, 'session.json'), 'utf8'));
-      if (saved.workspaceRoot !== this.root)
-        throw new Error('Saved workspace location does not match.');
-      const restored: AppState = { ...fresh, ...saved, phase: 'idle', error: undefined };
+      if (saved.workspaceRoot !== this.root) {
+        const [savedFolder, currentFolder] = await Promise.all([
+          stat(saved.workspaceRoot),
+          stat(this.root),
+        ]);
+        if (savedFolder.dev !== currentFolder.dev || savedFolder.ino !== currentFolder.ino)
+          throw new Error('Saved workspace location does not match.');
+      }
+      const restored: AppState = {
+        ...fresh,
+        ...saved,
+        workspaceRoot: this.root,
+        phase: 'idle',
+        error: undefined,
+      };
       restored.settings = validateAgentSettings(restored.settings);
       if (restored.project?.outputDir === 'tests/journeyproof')
         restored.project.outputDir = 'tests/testloom';
