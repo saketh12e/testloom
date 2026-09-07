@@ -1,0 +1,12 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import { verifyWorkspace } from '../src/core/verifier';
+const data=JSON.parse(await readFile('work/codex-validation.json','utf8'));
+const command={executable:'npm',args:['test'],label:'Generated Codex cart test'};
+const healthy=await verifyWorkspace(data.workspace,command,2,{prepareDemo:true,env:{PORT:'4331'},onProgress:console.log});
+assert.equal(healthy.status,'passed',JSON.stringify(healthy));
+assert.ok(healthy.runs.every(run=>run.output.includes('SAVE10')),'Generated test discovered');
+const mutant=await verifyWorkspace(data.workspace,command,1,{env:{PORT:'4331',JOURNEYPROOF_BROKEN_DISCOUNT:'1'},onProgress:console.log});
+assert.equal(mutant.status,'failed',JSON.stringify(mutant));
+await writeFile('work/codex-execution.json',JSON.stringify({healthy,mutant},null,2));
+console.log(JSON.stringify({healthy:healthy.status,repeats:healthy.runs.length,mutant:mutant.status},null,2));

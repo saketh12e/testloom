@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible JourneyProof problem.
+body:
+  - type: markdown
+    attributes:
+      value: "Use synthetic data. Do not attach credentials, private company code, or unreviewed screenshots. See SECURITY.md for sensitive reports."
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest reproduction
+      description: "Include the workflow, framework, macOS version, app version and whether this is the source or packaged app."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reviewed execution evidence
+      description: "Include test discovery and the relevant error. A timeout alone is not a product assertion failure."

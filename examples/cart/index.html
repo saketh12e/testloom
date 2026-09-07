@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Field Supply · JourneyProof cart</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <header><a href="/" aria-label="Field Supply home">FIELD / SUPPLY</a><span>JourneyProof demo · No real purchases</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">GOOD THINGS, EVERY DAY</p><h1>Pack a little possibility.</h1><p>Two everyday essentials. Add both, then try <strong>SAVE10</strong> for 10% off.</p></section>
+    <div class="shop">
+      <section aria-labelledby="products-heading"><h2 id="products-heading">The essentials <span>02</span></h2><div id="products" class="products"></div></section>
+      <section class="cart" aria-labelledby="cart-heading">
+        <div class="cart-title"><h2 id="cart-heading">Your cart</h2><button id="reset-cart" type="button" data-testid="reset-cart">Reset cart</button></div>
+        <div id="cart-items"></div>
+        <form id="coupon-form">
+          <label for="coupon">Coupon code</label>
+          <div class="coupon-row"><input id="coupon" name="coupon" data-testid="coupon" maxlength="64" autocomplete="off" placeholder="Try SAVE10" aria-describedby="coupon-hint coupon-error"><button type="submit" data-testid="apply-coupon">Apply coupon</button></div>
+          <p id="coupon-hint" class="hint">SAVE10 takes 10% off your subtotal.</p>
+        </form>
+        <p id="coupon-error" class="error" role="alert" data-testid="coupon-error" hidden></p>
+        <p id="coupon-status" role="status" data-testid="coupon-status"></p>
+        <dl class="totals" aria-live="polite"><div><dt>Subtotal</dt><dd data-testid="subtotal">$0.00</dd></div><div><dt>Discount</dt><dd data-testid="discount">$0.00</dd></div><div class="grand-total"><dt>Total</dt><dd data-testid="total">$0.00</dd></div></dl>
+        <p class="hint">USD · No shipping or tax in this demo.</p>
+      </section>
+    </div>
+    <p id="request-error" class="error" role="alert" hidden></p>
+  </main>
+  <footer>A small shop for a test worth keeping.<span>Record the journey. Specify the outcome.</span></footer>
+</body>
+</html>

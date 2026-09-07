@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/cart/package-lock.json
+      - run: npm ci
+      - run: npm run browsers
+      - run: npm run check
+      - name: Recorded journey and mutation verification
+        run: npm run test:journey
+      - name: Install cart test dependencies
+        working-directory: examples/cart
+        run: npm ci
+      - name: Install cart Chromium
+        working-directory: examples/cart
+        run: npm run browsers
+      - name: Cart baseline smoke test
+        working-directory: examples/cart
+        run: npm test
+      - name: Cart fixture contract checks
+        working-directory: examples/cart
+        run: npm run test:contract
+      - name: Retain cart failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cart-failure-evidence
+          path: examples/cart/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
