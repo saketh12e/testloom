@@ -568,7 +568,13 @@ export class JourneyService extends EventEmitter {
       if (controller.signal.aborted) throw new Error('Recording cancelled.');
     };
     try {
-      if (this.state.project!.isDemo) await this.startDemo();
+      if (
+        this.state.project!.isDemo &&
+        url.protocol === 'http:' &&
+        ['127.0.0.1', 'localhost'].includes(url.hostname) &&
+        Number(url.port || 80) === (this.state.project!.demoPort || 4318)
+      )
+        await this.startDemo();
       checkCancelled();
       const artifactDir = path.join(this.root, 'recordings', scenario.id);
       await mkdir(artifactDir, { recursive: true });

@@ -1,7 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chromium, type Browser, type BrowserContext, type Page, type Request } from 'playwright';
+import { errors, type Browser, type BrowserContext, type Page, type Request } from 'playwright';
+import { launchRecordingBrowser, recordingStartupMessage } from './recorder-startup';
 import type { InteractionEvent, LocatorSpec, Scenario } from '../shared/types.js';
 
 type Result = { events: InteractionEvent[]; network: Scenario['network']; warnings: string[] };
@@ -15,6 +16,7 @@ type RecorderOptions = {
   artifactDir: string;
   onEvent: (event: InteractionEvent) => void;
   onWarning?: (warning: string) => void;
+  readinessTimeoutMs?: number;
 };
 
 const ACTIONS = new Set([
@@ -504,31 +506,23 @@ export class BrowserRecorder {
   }
 
   private async launch(url: string, headless: boolean, binding: string): Promise<void> {
+    let stage: 'browser' | 'setup' | 'navigation' = 'browser';
     try {
       const testPort =
         process.env.JOURNEYPROOF_E2E === '1' &&
         /^\d{4,5}$/.test(process.env.JOURNEYPROOF_CDP_PORT || '')
           ? process.env.JOURNEYPROOF_CDP_PORT
           : undefined;
-      try {
-        this.browser = await chromium.launch({
+      this.browser = await launchRecordingBrowser(
+        {
           headless,
           ...(testPort ? { args: [`--remote-debugging-port=${testPort}`] } : {}),
-        });
-      } catch (error) {
-        if (this.state === 'stopping') throw new Error('Recording cancelled.');
-        if (
-          !/executable.*(doesn.t exist|not found)|browser.*not found|please run.*playwright install/is.test(
-            String(error),
-          )
-        )
-          throw error;
-        this.warn(
-          'Playwright Chromium is missing; using installed Google Chrome in a fresh context.',
-        );
-        this.browser = await chromium.launch({ channel: 'chrome', headless });
-      }
+        },
+        (message) => this.warn(message),
+        () => this.checkCancelled(),
+      );
       this.checkCancelled();
+      stage = 'setup';
       this.context = await this.browser.newContext({ acceptDownloads: false });
       this.checkCancelled();
       if (this.screenshots) {
@@ -596,21 +590,40 @@ export class BrowserRecorder {
       this.checkCancelled();
       this.mainPage = await this.context.newPage();
       this.checkCancelled();
-      await this.mainPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      stage = 'navigation';
+      // Separate reaching the document from optional scripts finishing. A slow
+      // CDN must not close an otherwise usable enterprise app or SSO page.
+      const response = await this.mainPage.goto(url, { waitUntil: 'commit', timeout: 30_000 });
+      try {
+        await this.mainPage.waitForLoadState('domcontentloaded', {
+          timeout: this.options.readinessTimeoutMs ?? 15_000,
+        });
+      } catch (error) {
+        this.checkCancelled();
+        if (!(error instanceof errors.TimeoutError) || !normalizedUrl(this.mainPage.url()))
+          throw error;
+        this.warn(
+          'The page is still loading. Recording remains open; wait until the page is usable before interacting.',
+        );
+      }
       this.checkCancelled();
+      if (response && response.status() >= 400)
+        this.warn(
+          `The starting page returned HTTP ${response.status()}. Recording remains open so you can inspect the response; this is not a successful test result.`,
+        );
+      if (normalizedUrl(this.mainPage.url()) !== normalizedUrl(url))
+        this.warn(
+          'The site redirected the recording browser. If a sign-in page is shown, sign in there before continuing. Your normal browser login is not shared.',
+        );
       this.state = 'recording';
-    } catch {
+    } catch (error) {
       const cancelled = this.state === 'stopping';
       this.accepting = false;
       await this.close();
       await this.queue;
       if (!cancelled) this.state = 'stopped';
       // Playwright errors may embed the original URL or page content.
-      throw new Error(
-        cancelled
-          ? 'Recording cancelled.'
-          : 'Could not start recording. Check the URL and install Chromium (npx playwright install chromium) or Google Chrome.',
-      );
+      throw new Error(cancelled ? 'Recording cancelled.' : recordingStartupMessage(error, stage));
     }
   }
 

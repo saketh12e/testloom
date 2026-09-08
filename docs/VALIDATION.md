@@ -1,5 +1,23 @@
 # Release validation
 
+## 0.3.1 remote recording startup — 2026-09-08
+
+- Formatting, type checking, production build and **140 regression tests passed**.
+- The **packaged app** opened and stopped recordings for both the reported external HTTPS root address and its nested connector page. Both redirected to the sign-in page and saved a navigation case with redirect guidance. No website clicks, login, form submissions or protected operations were performed. Original test-project bytes remained unchanged; there were no renderer errors. Private endpoint details remain in local working evidence rather than the public source archive.
+- With an explicitly empty Playwright browser cache and no installed Chrome/Edge, the packaged app displayed the version-matched browser-installation message, removed the internal IPC error prefix and returned to idle without creating a case. Chrome/Edge fallback selection is covered by deterministic launch tests; a live installed Chrome/Edge fallback could not be exercised on this Mac.
+- Real-browser fixtures cover cross-origin HTTP redirects, synthetic HTTPS responses, slow script readiness, DNS navigation failures, HTTP 403 responses and cancellation. A service regression preserves both owned-demo loopback aliases and ensures remote URLs do not start the local demo server.
+- The packaged app passed the existing desktop workflow: **500 saved cases**, selected generation, recording, repeated verification and export, with zero renderer errors. Its app and ZIP extraction passed the ad-hoc signature gates.
+
+The friend's original screenshot showed the old generic startup error. That message erased the underlying cause, so this release does not claim to identify or repair the friend's VPN, certificates or browser installation remotely. The supplied address is accepted and recordable on the validation Mac; authenticated test replay remains unverified. [Remote website setup](REMOTE-WEBSITES.md) explains the remaining requirements.
+
+Reproduce the opt-in packaged startup check using an address you are authorized to open:
+
+```sh
+TESTLOOM_REMOTE_URL=https://your-app.example.com \
+TESTLOOM_EXECUTABLE="$PWD/release/mac-arm64/Testloom.app/Contents/MacOS/Testloom" \
+npx tsx tests/remote-url.integration.ts
+```
+
 ## 0.3.0 native sessions and large repositories — 2026-09-08
 
 Checked with Codex CLI **0.153.4**, Claude Code CLI **2.1.116**, Electron **44.2.0** and Node **22.22.3** on an Apple Silicon Mac. Results below distinguish deterministic checks, live model behavior and packaged runtime checks.

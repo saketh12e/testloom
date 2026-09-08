@@ -639,7 +639,7 @@
           </button>
         </div>
         <h2 id="record-heading">Start with a real interaction.</h2>
-        <p class="muted">We’ll open a browser and follow your steps.</p>
+        <p class="muted">Record a local or remote HTTP/HTTPS website in a fresh browser.</p>
         <label class="field"
           >Case name<input
             id="record-name"
@@ -653,10 +653,16 @@
             id="start-url"
             type="url"
             required
-            placeholder="http://localhost:3000"
+            placeholder="https://your-app.example.com"
             autocomplete="url"
-            data-mutation /></label
-        ><label class="toggle-row"
+            data-mutation
+        /></label>
+        <p class="field-hint">
+          Use a direct page URL without query parameters or a fragment. For a private app, connect
+          to its VPN if required and sign in inside the recording browser. Your existing Chrome or
+          Edge login is not shared.
+        </p>
+        <label class="toggle-row"
           ><span
             ><strong>Capture screenshots</strong
             ><small>Save a visual reference with each step.</small></span

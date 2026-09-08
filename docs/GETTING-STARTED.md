@@ -1,6 +1,6 @@
 # Getting started with Testloom
 
-Testloom v0.3.0 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
+Testloom v0.3.1 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
 
 ## Install and launch
 
@@ -12,7 +12,7 @@ npm run browsers
 npm start
 ```
 
-For a downloaded app, use the v0.3.0 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.3.0). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
+For a downloaded app, use the v0.3.1 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.3.1). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
 
 For the downloaded app, install Node.js 20.19+ and its recording/test browser once:
 
@@ -77,6 +77,8 @@ Replace both placeholders before running. Keep the generated test unchanged betw
 The cart's `npm run test:contract` is a separate fixture check and cannot replace testing the app-generated file. The v0.2 suite checks passed all three healthy cases and detected the disclosed discount mutation. See [Validation](VALIDATION.md) for exact results.
 
 ## Connect your own project
+
+Hosted HTTPS apps work with a local test project. Read [remote website setup](REMOTE-WEBSITES.md) for installed-browser fallback, company VPNs, sign-in redirects and precise startup errors.
 
 Choose the test module folder, review the detected framework and example tests, and start its application using that project's setup. Use **Add context files** for relevant page objects, helpers or configuration; check **Preview prompt** to see what fits. Excerpts are cached at connection/addition, so reconnect to refresh them and re-add specific files as needed. Your saved project cases survive folder switching. Record the reachable app URL. Review agent context, add expected results, generate and inspect the copied workspace. Supply that project's dependencies, services and safe test data in the copy.
 

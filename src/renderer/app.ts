@@ -127,7 +127,10 @@ function toast(message: string) {
   toastTimer = window.setTimeout(() => show('toast', false), 4200);
 }
 function report(error: unknown, heading = 'Something needs attention') {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = (error instanceof Error ? error.message : String(error)).replace(
+    /^Error invoking remote method 'journey:[^']+': (?:Error: )?/,
+    '',
+  );
   text('error-heading', heading);
   text('error-message', message);
   show('error-banner', true);
