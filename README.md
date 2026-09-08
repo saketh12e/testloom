@@ -6,7 +6,7 @@
 
 Testloom is an open-source Mac workspace for people who know how an application should behave. Connect your local test project, record a flow, and spell out the expected result. Use Codex to adapt tests to your project, Claude Code as an alternative, or portable Playwright templates without an AI account. Review the code and execution evidence, then take the tests back to your repository.
 
-**v0.3.1 is an ad-hoc signed Apple Silicon developer preview, without Apple notarization.** It includes resumable case sessions, native screenshot input and large-repository support. The 0.3.1 patch improves remote website startup, installed-browser fallback and actionable errors; see [remote website setup](docs/REMOTE-WEBSITES.md). See [Mac installation help](docs/MAC-OPENING.md), [release assets](https://github.com/saketh12e/testloom/releases/tag/v0.3.1), and the version-specific [validation record](docs/VALIDATION.md).
+**v0.4.0 includes its own recording browser, with separate Apple Silicon and Intel Mac downloads (macOS 14+).** No separate browser installation or Node is needed to record a hosted website. Startup checks browser readiness, recovers through healthy installed browsers and provides a private startup report if it cannot recover. This remains an ad-hoc signed developer preview without Apple notarization. See [release notes](docs/RELEASE-0.4.0.md), [Mac installation](docs/MAC-OPENING.md), [downloads](https://github.com/saketh12e/testloom/releases/tag/v0.4.0) and [validation](docs/VALIDATION.md).
 
 ![Testloom desktop workspace](assets/overview.png)
 
@@ -32,7 +32,7 @@ npm start
 
 Previously named JourneyProof. The [original repository URL](https://github.com/saketh12e/journeyproof) redirects here; existing local folders can keep their names.
 
-For a packaged preview, download the **v0.3.1 Apple Silicon** asset from Releases, unzip it and move **Testloom.app** to Applications. It is not Apple Developer signed or notarized. Follow [Mac installation help](docs/MAC-OPENING.md) to verify the download and open a trusted preview; keep system-wide protections enabled.
+For a packaged preview, download the **v0.4.0 Apple Silicon or Intel** asset from Releases, unzip it and move **Testloom.app** to Applications. It is not Apple Developer signed or notarized. Follow [Mac installation help](docs/MAC-OPENING.md) to verify the download and open a trusted preview; keep system-wide protections enabled.
 
 1. Open **Try the cart demo**. It includes three hand-authored cases for valid, invalid and empty coupons.
 2. Review the cases, select them, choose **Portable**, and generate the batch.

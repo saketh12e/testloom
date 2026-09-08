@@ -14,8 +14,19 @@ concurrency:
 
 jobs:
   checks:
-    runs-on: macos-latest
-    timeout-minutes: 20
+    name: Mac checks (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+            app: release/mac-arm64/Testloom.app
+          - runner: macos-15-intel
+            arch: x64
+            app: release/mac/Testloom.app
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,10 +37,25 @@ jobs:
             package-lock.json
             examples/cart/package-lock.json
       - run: npm ci
+      - name: Confirm native runner architecture
+        run: node -e "if (process.platform !== 'darwin' || process.arch !== '${{ matrix.arch }}') process.exit(1)"
       - run: npm run browsers
       - run: npm run check
       - name: Mac release ZIP and signature integrity
         run: npm run dist:mac
+      - name: Verify bundled browser in app and extracted release
+        run: |
+          node scripts/verify-recording-browser.mjs "${{ matrix.app }}" --arch ${{ matrix.arch }}
+          for artifact in release/*.zip; do
+            node scripts/verify-recording-browser.mjs "$artifact" --arch ${{ matrix.arch }}
+          done
+      - name: Record with the packaged browser and an empty Playwright cache
+        run: |
+          recording_cache="$(mktemp -d "$RUNNER_TEMP/testloom-empty-browser-cache.XXXXXX")"
+          trap 'rm -rf "$recording_cache"' EXIT
+          release_archives=(release/*.zip)
+          test "${#release_archives[@]}" -eq 1
+          PLAYWRIGHT_BROWSERS_PATH="$recording_cache" TESTLOOM_RELEASE_ZIP="${release_archives[0]}" npm run test:packaged
       - name: Recorded journey and mutation verification
         run: npm run test:journey
       - name: Positive, negative and boundary suite verification
@@ -50,7 +76,15 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cart-failure-evidence
+          name: cart-failure-evidence-${{ matrix.arch }}
           path: examples/cart/test-results/
           if-no-files-found: ignore
+          retention-days: 7
+      - name: Retain verified Mac release ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: testloom-mac-${{ matrix.arch }}
+          path: release/*.zip
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 7

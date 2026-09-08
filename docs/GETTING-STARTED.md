@@ -1,6 +1,6 @@
 # Getting started with Testloom
 
-Testloom v0.3.1 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
+Testloom v0.4.0 is an ad-hoc signed Mac developer preview for Apple Silicon and Intel, requiring macOS 14+. It is not Apple notarized. The downloaded app includes its recording browser. Recording a hosted website needs no separate browser or Node installation. The cart demo, source development and generated npm tests still need **Node.js 20.19+**, npm and their test browser.
 
 ## Install and launch
 
@@ -12,9 +12,9 @@ npm run browsers
 npm start
 ```
 
-For a downloaded app, use the v0.3.1 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.3.1). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
+For a downloaded app, use the v0.4.0 asset matching your Mac processor in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.4.0). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
 
-For the downloaded app, install Node.js 20.19+ and its recording/test browser once:
+For the cart demo and generated Playwright tests, install Node.js 20.19+ and their test browser. This is separate from the recording browser included with the app:
 
 ```sh
 npx playwright@1.63.0 install chromium

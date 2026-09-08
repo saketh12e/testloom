@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type LaunchOptions } from 'playwright';
 import playwrightPackage from 'playwright/package.json';
+import { classifyBrowserFailure } from './browser-diagnostics';
+import { bundledBrowserExecutable, checkRecordingPlatform } from './recording-browser-bundle';
 
 export function missingBrowser(error: unknown): boolean {
   return /TESTLOOM_BROWSER_MISSING|executable.*(doesn.t exist|not found)|distribution.*not found|browser.*not found|please run.*playwright install/i.test(
@@ -17,6 +19,10 @@ export function recordingStartupMessage(
   stage: 'browser' | 'setup' | 'navigation',
 ): string {
   const detail = String(error);
+  if (/TESTLOOM_MACOS_UNSUPPORTED/.test(detail))
+    return 'This recording browser requires macOS 14 or later. Update macOS on this Mac before recording.';
+  if (/TESTLOOM_BUNDLE_INVALID/.test(detail))
+    return 'Testloom’s included recording browser is incomplete or does not match this app. Replace Testloom with the complete release for this Mac’s processor.';
   if (stage === 'browser' && missingBrowser(error))
     return `No recording browser was found. Install Google Chrome or Microsoft Edge, or run npx playwright@${playwrightPackage.version} install chromium once, then retry. This does not mean the website URL is invalid.`;
   if (/net::ERR_(?:CERT_[A-Z_]+|SSL_[A-Z_]+)/.test(detail))
@@ -33,14 +39,14 @@ export function recordingStartupMessage(
     return 'The recording browser could not reach the website. Check that it opens on this Mac and that the required VPN, network and service are available.';
   if (/net::ERR_TOO_MANY_REDIRECTS/.test(detail))
     return 'The website redirected too many times. Check its sign-in or SSO redirect configuration, or start from its login page.';
-  if (/net::ERR_(?:BLOCKED_BY_[A-Z_]+|ACCESS_DENIED)/.test(detail))
+  if (policyDenied(error) || /net::ERR_(?:BLOCKED_BY_[A-Z_]+|ACCESS_DENIED)/.test(detail))
     return 'Access was blocked by the browser, network or device policy. Ask your administrator to allow the recording browser and this website.';
   if (/TimeoutError|timeout.*exceeded|net::ERR_(?:TIMED_OUT|CONNECTION_TIMED_OUT)/i.test(detail))
     return stage === 'navigation'
       ? 'The website did not respond in time. Check its availability and any required VPN, then retry. The recording browser is installed.'
       : 'The recording browser did not become ready in time. Close its leftover windows, check device policy, then retry.';
   if (/Target.*closed|browser.*closed|page.*closed/i.test(detail))
-    return 'The recording browser closed before startup finished. Keep its window open while recording; check device policy if it closes by itself.';
+    return 'The recording browser exited before it was ready. Testloom could not recover automatically. Export the startup report below to see which browsers failed and any reported exit code or signal.';
   if (/EACCES|EPERM|permission denied/i.test(detail))
     return 'Testloom could not access its recording browser or local recording folder. Check Mac permissions and device policy, then retry.';
   return stage === 'browser'
@@ -50,14 +56,70 @@ export function recordingStartupMessage(
       : 'The browser opened, but navigation failed. Check this address in a browser on the same Mac, including any required sign-in, VPN or company access policy.';
 }
 
-/** A missing bundled browser must not prevent use of an already installed browser. */
+export interface RecordingBrowserLaunchControl {
+  bundleRoot?: string;
+  signal?: AbortSignal;
+  onAttempt?: (label: string, error?: unknown) => void;
+  onProgress?: (message: string) => void;
+}
+
+/** Remove parent-app injection variables; preserve network, certificate and OS settings. */
+export function recordingBrowserEnvironment(source: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(source).filter(
+      ([key, value]) =>
+        value !== undefined &&
+        !/^(?:ELECTRON_|NODE_OPTIONS$|NODE_PATH$|DYLD_|LD_PRELOAD$|LD_LIBRARY_PATH$)/.test(key),
+    ),
+  ) as Record<string, string>;
+}
+
+function policyDenied(error: unknown): boolean {
+  return classifyBrowserFailure(error).category === 'policy';
+}
+
+/** Exercise the actual page protocol before opening any customer website. */
+async function probeBrowser(browser: Browser, signal?: AbortSignal): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abort: (() => void) | undefined;
+  const probe = async () => {
+    const context = await browser.newContext({ acceptDownloads: false });
+    try {
+      const page = await context.newPage();
+      if ((await page.evaluate(() => 6 * 7)) !== 42)
+        throw new Error('Browser protocol readiness failed');
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  };
+  try {
+    await Promise.race([
+      probe(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Browser readiness timeout exceeded')), 8_000);
+        abort = () => reject(new Error('Recording cancelled.'));
+        signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) abort();
+      }),
+    ]);
+    if (!browser.isConnected()) throw new Error('Browser closed before ready');
+  } finally {
+    clearTimeout(timer);
+    if (abort) signal?.removeEventListener('abort', abort);
+  }
+}
+
+/** Fallback happens only before navigation, once per candidate, with owned fresh profiles. */
 export async function launchRecordingBrowser(
   options: LaunchOptions,
   warn: (message: string) => void,
   checkCancelled: () => void,
+  control: RecordingBrowserLaunchControl = {},
 ): Promise<Browser> {
+  checkCancelled();
+  checkRecordingPlatform();
   const candidates: { label: string; options: LaunchOptions }[] = [
-    { label: 'Playwright Chromium', options: {} },
+    ...(control.bundleRoot ? [] : [{ label: 'Playwright Chromium', options: {} }]),
     { label: 'Google Chrome', options: { channel: 'chrome' } },
   ];
   const userBrowser = async (name: string, executable: string) => {
@@ -79,19 +141,54 @@ export async function launchRecordingBrowser(
   await userBrowser('Google Chrome', 'Google Chrome');
   candidates.push({ label: 'Microsoft Edge', options: { channel: 'msedge' } });
   await userBrowser('Microsoft Edge', 'Microsoft Edge');
+  if (control.bundleRoot) {
+    try {
+      candidates.unshift({
+        label: 'Testloom Chromium',
+        options: { executablePath: await bundledBrowserExecutable(control.bundleRoot) },
+      });
+    } catch (error) {
+      control.onAttempt?.('Testloom Chromium', error);
+      // A damaged bundled runtime can still recover through a healthy installed browser.
+    }
+  }
+  let firstFailure: unknown;
+  let attempted = false;
+  const deadline = Date.now() + 45_000;
   for (const [index, candidate] of candidates.entries()) {
     checkCancelled();
+    if (control.signal?.aborted) throw new Error('Recording cancelled.');
+    if (Date.now() >= deadline) break;
+    control.onProgress?.(`Checking ${candidate.label}…`);
+    let browser: Browser | undefined;
     try {
-      const browser = await chromium.launch({ ...options, ...candidate.options });
-      if (index)
+      attempted = true;
+      browser = await chromium.launch({
+        ...options,
+        ...candidate.options,
+        timeout: Math.min(options.timeout || 15_000, 15_000, Math.max(1, deadline - Date.now())),
+        env: recordingBrowserEnvironment(options.env ?? process.env),
+      });
+      checkCancelled();
+      if (control.signal?.aborted) throw new Error('Recording cancelled.');
+      await probeBrowser(browser, control.signal);
+      checkCancelled();
+      control.onAttempt?.(candidate.label);
+      if (index || (control.bundleRoot && candidate.label !== 'Testloom Chromium'))
         warn(
           `Using installed ${candidate.label} in a fresh recording browser. Your existing browser login is not shared.`,
         );
       return browser;
     } catch (error) {
+      await browser?.close().catch(() => undefined);
       checkCancelled();
-      if (!missingBrowser(error)) throw error;
+      if (control.signal?.aborted) throw new Error('Recording cancelled.');
+      control.onAttempt?.(candidate.label, error);
+      if (policyDenied(error)) throw error;
+      if (!missingBrowser(error)) firstFailure ??= error;
     }
   }
-  throw new Error('TESTLOOM_BROWSER_MISSING');
+  if (firstFailure) throw firstFailure;
+  if (control.bundleRoot) throw new Error('TESTLOOM_BUNDLE_INVALID');
+  throw new Error(attempted ? 'TESTLOOM_BROWSER_MISSING' : 'Browser readiness timeout exceeded');
 }

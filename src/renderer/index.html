@@ -639,7 +639,10 @@
           </button>
         </div>
         <h2 id="record-heading">Start with a real interaction.</h2>
-        <p class="muted">Record a local or remote HTTP/HTTPS website in a fresh browser.</p>
+        <p class="muted">
+          Record a local or remote HTTP/HTTPS website. The Mac app includes its own recording
+          browser.
+        </p>
         <label class="field"
           >Case name<input
             id="record-name"
@@ -671,7 +674,23 @@
         <p id="screenshot-help" class="field-hint" hidden>
           Screenshots may include information visible on the page.
         </p>
+        <p
+          id="browser-startup-progress"
+          class="field-hint"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></p>
         <p id="record-error" class="inline-error" role="alert" hidden></p>
+        <div id="browser-startup-help" hidden>
+          <button id="export-browser-startup" type="button" class="button">
+            Export startup report
+          </button>
+          <p class="field-hint">
+            Includes app, system and browser failure details. No website addresses, recordings,
+            passwords or local file paths.
+          </p>
+        </div>
         <div class="dialog-footer">
           <button id="cancel-record" class="button" type="button">Cancel</button
           ><button id="start-recording" class="button primary" type="submit" data-mutation>

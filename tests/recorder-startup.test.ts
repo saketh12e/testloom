@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { chromium, errors, type Browser, type LaunchOptions } from 'playwright';
+import {
+  chromium,
+  errors,
+  type Browser,
+  type BrowserContext,
+  type LaunchOptions,
+} from 'playwright';
 import playwrightPackage from 'playwright/package.json';
 import {
   launchRecordingBrowser,
   missingBrowser,
   recordingStartupMessage,
+  recordingBrowserEnvironment,
 } from '../src/core/recorder-startup.js';
 
 const privateDetails =
@@ -33,7 +40,7 @@ const messages = {
   browserTimeout:
     'The recording browser did not become ready in time. Close its leftover windows, check device policy, then retry.',
   closed:
-    'The recording browser closed before startup finished. Keep its window open while recording; check device policy if it closes by itself.',
+    'The recording browser exited before it was ready. Testloom could not recover automatically. Export the startup report below to see which browsers failed and any reported exit code or signal.',
   browser:
     'The recording browser could not launch. Check that Chrome or Edge can open on this Mac and that device policy permits automation.',
   setup:
@@ -176,7 +183,11 @@ class StubBrowser extends EventEmitter implements Browser {
   private connected = true;
   bind: Browser['bind'] = unsupportedBrowserOperation;
   newBrowserCDPSession: Browser['newBrowserCDPSession'] = unsupportedBrowserOperation;
-  newContext: Browser['newContext'] = unsupportedBrowserOperation;
+  newContext: Browser['newContext'] = async () =>
+    ({
+      newPage: async () => ({ evaluate: async () => 42 }),
+      close: async () => undefined,
+    }) as unknown as BrowserContext;
   newPage: Browser['newPage'] = unsupportedBrowserOperation;
   startTracing: Browser['startTracing'] = unsupportedBrowserOperation;
   stopTracing: Browser['stopTracing'] = unsupportedBrowserOperation;
@@ -337,7 +348,7 @@ for (const [name, failure] of [
   ['permission failure', new Error('browserType.launch: spawn EACCES' + privateDetails)],
   ['installed browser crash', installedBrowserCrash],
 ] as const) {
-  test(`launch does not fall back after ${name}`, async (t) => {
+  test(`launch exhausts candidates and preserves the first ${name}`, async (t) => {
     const warnings: string[] = [];
     const launch = t.mock.method(chromium, 'launch', async (): Promise<Browser> => {
       throw failure;
@@ -350,12 +361,12 @@ for (const [name, failure] of [
       ),
       (error: unknown) => error === failure,
     );
-    assert.equal(launch.mock.callCount(), 1);
+    assert.ok(launch.mock.callCount() >= 3);
     assert.deepEqual(warnings, []);
   });
 }
 
-test('a Chrome runtime failure stops fallback before Edge is attempted', async (t) => {
+test('a Chrome runtime failure still tries Edge before reporting the original failure', async (t) => {
   const failure = new Error('browserType.launch: process exited with signal SIGABRT');
   const warnings: string[] = [];
   const launch = t.mock.method(
@@ -375,8 +386,10 @@ test('a Chrome runtime failure stops fallback before Edge is attempted', async (
     (error: unknown) => error === failure,
   );
   assert.deepEqual(
-    launch.mock.calls.map((call) => call.arguments[0]?.channel),
-    [undefined, 'chrome'],
+    launch.mock.calls
+      .filter((call) => !call.arguments[0]?.executablePath)
+      .map((call) => call.arguments[0]?.channel),
+    [undefined, 'chrome', 'msedge'],
   );
   assert.deepEqual(warnings, []);
 });
@@ -419,4 +432,109 @@ test('cancellation during a failed launch prevents the next browser attempt', as
   );
   assert.equal(launch.mock.callCount(), 1);
   assert.deepEqual(warnings, []);
+});
+
+test('a crashed first browser recovers with healthy installed Chrome', async (t) => {
+  const good = new StubBrowser();
+  const attempts: string[] = [];
+  t.mock.method(chromium, 'launch', async (options?: LaunchOptions) => {
+    if (options?.channel === 'chrome') return good;
+    throw installedBrowserCrash;
+  });
+  const result = await launchRecordingBrowser(
+    {},
+    () => {},
+    () => {},
+    {
+      onAttempt: (label, error) => attempts.push(`${label}:${error ? 'failed' : 'ready'}`),
+    },
+  );
+  assert.equal(result, good);
+  assert.deepEqual(attempts, ['Playwright Chromium:failed', 'Google Chrome:ready']);
+  await result.close();
+});
+
+test('a protocol failure closes the failed browser before attempting another', async (t) => {
+  const broken = new StubBrowser(),
+    good = new StubBrowser();
+  t.mock.method(broken, 'newContext', async () => {
+    throw new Error('Target page, context or browser has been closed');
+  });
+  let calls = 0;
+  t.mock.method(chromium, 'launch', async () => {
+    if (++calls === 1) return broken;
+    assert.equal(broken.isConnected(), false);
+    return good;
+  });
+  const result = await launchRecordingBrowser(
+    {},
+    () => {},
+    () => {},
+  );
+  assert.equal(result, good);
+  assert.equal(calls, 2);
+  await result.close();
+});
+
+test('an explicit device policy block stops fallback', async (t) => {
+  const failure = new Error('Remote debugging is disabled by administrator policy');
+  const launch = t.mock.method(chromium, 'launch', async () => {
+    throw failure;
+  });
+  await assert.rejects(
+    launchRecordingBrowser(
+      {},
+      () => {},
+      () => {},
+    ),
+    (error) => error === failure,
+  );
+  assert.equal(launch.mock.callCount(), 1);
+  assert.match(recordingStartupMessage(failure, 'browser'), /Access was blocked/);
+});
+
+test('a cancelled successful launch closes its owned browser and never retries', async (t) => {
+  const browser = new StubBrowser();
+  let cancelled = false;
+  const launch = t.mock.method(chromium, 'launch', async () => {
+    cancelled = true;
+    return browser;
+  });
+  await assert.rejects(
+    launchRecordingBrowser(
+      {},
+      () => {},
+      () => {
+        if (cancelled) throw new Error('Recording cancelled.');
+      },
+    ),
+    /Recording cancelled/,
+  );
+  assert.equal(launch.mock.callCount(), 1);
+  assert.equal(browser.isConnected(), false);
+});
+
+test('launch environment drops app injection but preserves proxy, certificates and normal OS values', () => {
+  const source = {
+    HOME: '/synthetic',
+    PATH: '/bin',
+    HTTPS_PROXY: 'http://company-proxy',
+    NODE_EXTRA_CA_CERTS: '/synthetic/company-ca.pem',
+    SSL_CERT_FILE: '/synthetic/cert.pem',
+    ELECTRON_RUN_AS_NODE: '1',
+    ELECTRON_NO_ASAR: '1',
+    NODE_OPTIONS: '--require /synthetic/hook',
+    NODE_PATH: '/synthetic/modules',
+    DYLD_INSERT_LIBRARIES: '/synthetic/inject',
+    LD_PRELOAD: '/synthetic/inject',
+    ABSENT: undefined,
+  };
+  assert.deepEqual(recordingBrowserEnvironment(source), {
+    HOME: '/synthetic',
+    PATH: '/bin',
+    HTTPS_PROXY: 'http://company-proxy',
+    NODE_EXTRA_CA_CERTS: '/synthetic/company-ca.pem',
+    SSL_CERT_FILE: '/synthetic/cert.pem',
+  });
+  assert.equal(source.ELECTRON_RUN_AS_NODE, '1');
 });

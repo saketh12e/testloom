@@ -3,6 +3,12 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errors, type Browser, type BrowserContext, type Page, type Request } from 'playwright';
 import { launchRecordingBrowser, recordingStartupMessage } from './recorder-startup';
+import {
+  createBrowserStartupReport,
+  addBrowserAttempt,
+  finalizeBrowserStartupReport,
+  type BrowserStartupReport,
+} from './browser-diagnostics';
 import type { InteractionEvent, LocatorSpec, Scenario } from '../shared/types.js';
 
 type Result = { events: InteractionEvent[]; network: Scenario['network']; warnings: string[] };
@@ -17,6 +23,9 @@ type RecorderOptions = {
   onEvent: (event: InteractionEvent) => void;
   onWarning?: (warning: string) => void;
   readinessTimeoutMs?: number;
+  browserBundleRoot?: string;
+  onStartupReport?: (report: BrowserStartupReport) => Promise<void>;
+  onProgress?: (message: string) => void;
 };
 
 const ACTIONS = new Set([
@@ -471,6 +480,7 @@ export class BrowserRecorder {
   private control = '';
   private nonce = '';
   private sequence = 0;
+  private startupController?: AbortController;
 
   constructor(private readonly options: RecorderOptions) {}
 
@@ -487,6 +497,7 @@ export class BrowserRecorder {
       throw new Error('A recording is already active.');
     if (!normalizedUrl(url)) throw new Error('Recording requires an HTTP or HTTPS URL.');
     this.state = 'starting';
+    this.startupController = new AbortController();
     this.accepting = true;
     this.events = [];
     this.network = [];
@@ -507,6 +518,7 @@ export class BrowserRecorder {
 
   private async launch(url: string, headless: boolean, binding: string): Promise<void> {
     let stage: 'browser' | 'setup' | 'navigation' = 'browser';
+    const report = createBrowserStartupReport();
     try {
       const testPort =
         process.env.JOURNEYPROOF_E2E === '1' &&
@@ -520,6 +532,14 @@ export class BrowserRecorder {
         },
         (message) => this.warn(message),
         () => this.checkCancelled(),
+        {
+          bundleRoot: this.options.browserBundleRoot,
+          signal: this.startupController?.signal,
+          onAttempt: (label, error) => {
+            addBrowserAttempt(report, label, error);
+          },
+          onProgress: this.options.onProgress,
+        },
       );
       this.checkCancelled();
       stage = 'setup';
@@ -591,6 +611,7 @@ export class BrowserRecorder {
       this.mainPage = await this.context.newPage();
       this.checkCancelled();
       stage = 'navigation';
+      this.options.onProgress?.('Opening your website…');
       // Separate reaching the document from optional scripts finishing. A slow
       // CDN must not close an otherwise usable enterprise app or SSO page.
       const response = await this.mainPage.goto(url, { waitUntil: 'commit', timeout: 30_000 });
@@ -616,14 +637,21 @@ export class BrowserRecorder {
           'The site redirected the recording browser. If a sign-in page is shown, sign in there before continuing. Your normal browser login is not shared.',
         );
       this.state = 'recording';
+      finalizeBrowserStartupReport(report, 'ready', stage);
     } catch (error) {
       const cancelled = this.state === 'stopping';
+      finalizeBrowserStartupReport(report, cancelled ? 'cancelled' : 'failed', stage, error);
       this.accepting = false;
       await this.close();
       await this.queue;
       if (!cancelled) this.state = 'stopped';
       // Playwright errors may embed the original URL or page content.
       throw new Error(cancelled ? 'Recording cancelled.' : recordingStartupMessage(error, stage));
+    } finally {
+      await this.options
+        .onStartupReport?.(report)
+        .catch(() => this.warn('The browser startup report could not be saved.'));
+      this.options.onProgress?.('');
     }
   }
 
@@ -744,6 +772,7 @@ export class BrowserRecorder {
   async stop(): Promise<Result> {
     if (this.stopping) return this.stopping;
     const wasStarting = this.state === 'starting';
+    this.startupController?.abort();
     this.state = 'stopping';
     this.stopping = this.finish(wasStarting);
     return this.stopping;

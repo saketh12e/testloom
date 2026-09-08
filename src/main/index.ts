@@ -40,6 +40,16 @@ function registerHandlers() {
     'load-demo': () => service.loadDemo(),
     'start-recording': (input) => service.startRecording(input),
     'stop-recording': () => service.stopRecording(),
+    'export-browser-startup-report': async () => {
+      const result = await dialog.showSaveDialog(window!, {
+        title: 'Export browser startup report',
+        defaultPath: 'testloom-browser-startup.json',
+        filters: [{ name: 'Startup report', extensions: ['json'] }],
+      });
+      return result.canceled || !result.filePath
+        ? null
+        : service.exportBrowserStartupReportTo(result.filePath);
+    },
     'save-scenario': (input) => service.saveScenario(input),
     'save-case': (input) => service.saveCase(input),
     'duplicate-case': (input) => service.duplicateCase(input),
@@ -100,7 +110,7 @@ function registerHandlers() {
       try {
         return await handler(...args);
       } catch (error) {
-        service.reportError(error);
+        if (!/Recording cancelled\./.test(String(error))) service.reportError(error);
         throw error;
       }
     });
@@ -150,6 +160,11 @@ app.whenReady().then(async () => {
   service = new JourneyService(
     path.join(app.getPath('userData'), 'workspace'),
     path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'examples/cart'),
+    {
+      browserBundleRoot: app.isPackaged
+        ? path.join(process.resourcesPath, 'recording-browser')
+        : undefined,
+    },
   );
   await service.initialize();
   service.on('update', (state) => {
@@ -202,6 +217,24 @@ app.whenReady().then(async () => {
               void shell.openExternal(
                 'https://github.com/saketh12e/testloom/blob/main/docs/GETTING-STARTED.md',
               );
+            },
+          },
+          {
+            label: 'Export browser startup report…',
+            click: async () => {
+              try {
+                if (!service.state.browserStartup)
+                  throw new Error('Start a recording first to create a startup report.');
+                const result = await dialog.showSaveDialog(window!, {
+                  title: 'Export browser startup report',
+                  defaultPath: 'testloom-browser-startup.json',
+                  filters: [{ name: 'Startup report', extensions: ['json'] }],
+                });
+                if (!result.canceled && result.filePath)
+                  await service.exportBrowserStartupReportTo(result.filePath);
+              } catch (error) {
+                service.reportError(error);
+              }
             },
           },
           {

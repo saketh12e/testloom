@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os';
 import verifyMacRelease, { verifyMacSignature } from '../scripts/verify-mac-signature.mjs';
 
 test(
-  'Mac release gate accepts a sealed ZIP and rejects changed resources',
+  'Mac release gate rejects missing bundled browser and changed sealed resources',
   {
     skip: process.platform !== 'darwin',
   },
-  (t) => {
+  async (t) => {
     const root = mkdtempSync(path.join(tmpdir(), 'testloom-signature-test-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const app = path.join(root, 'Fixture.app');
@@ -41,11 +41,14 @@ test(
     const packager = { appInfo: { productFilename: 'Fixture' } };
     const zip = path.join(root, 'good.zip');
     execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, zip]);
-    verifyMacRelease({ file: zip, packager });
+    await assert.rejects(verifyMacRelease({ file: zip, packager }), /ENOENT|recording-browser/);
     writeFileSync(resource, 'modified after signing');
     assert.throws(() => verifyMacSignature(app));
     const badZip = path.join(root, 'bad.zip');
     execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, badZip]);
-    assert.throws(() => verifyMacRelease({ file: badZip, packager }));
+    await assert.rejects(
+      verifyMacRelease({ file: badZip, packager }),
+      /sealed resource|signature|invalid/,
+    );
   },
 );

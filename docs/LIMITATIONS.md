@@ -1,6 +1,6 @@
 # Limitations
 
-Testloom v0.3.0 is an **ad-hoc signed Apple Silicon developer preview**. It is not Apple Developer signed or notarized. Gatekeeper may still block it; see [Mac installation help](MAC-OPENING.md). The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
+Testloom v0.4.0 is an **ad-hoc signed Apple Silicon and Intel Mac developer preview**, requiring macOS 14+. It is not Apple Developer signed or notarized. Gatekeeper may still block it; see [Mac installation help](MAC-OPENING.md). The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
 
 ## Recording and requirements
 
@@ -56,3 +56,7 @@ The cart uses USD, $40/$60 products, integer-cent arithmetic, a 10% coupon and q
 The desktop demo selects an available loopback port and updates its copied configuration; use the URL shown in the app. The standalone cart still defaults to port 4318. `JOURNEYPROOF_BROKEN_DISCOUNT=1` deliberately applies 5% instead of 10%, producing $95.00 instead of $90.00. The baseline smoke test intentionally misses this defect. A generated coupon test must reach and fail its unchanged exact-value assertion to establish detection.
 
 CI does not by itself establish native desktop behavior, live provider success, packaged distribution or compatibility with other Macs. Use [Getting started](GETTING-STARTED.md) for the first module and [Roadmap](ROADMAP.md) for broader rollout criteria.
+
+## Browser startup
+
+The app includes a pinned Chromium build and checks its readiness before website navigation. Bounded recovery and release regression checks reduce known launch failures; they cannot guarantee operation on unsupported operating systems, damaged installations or devices whose policies prohibit automation. The startup report records available exit evidence, not a definitive diagnosis of every crash. Chrome/Edge fallback uses fresh profiles and remains subject to browser policy.

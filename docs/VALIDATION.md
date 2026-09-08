@@ -124,3 +124,12 @@ Working reports under ignored `work/` contain the actual local run data; source 
 ## Limits of the evidence
 
 These tests cover the stated sample behaviors, protocol boundaries, and demonstrated library/batch sizes. They do not establish complete business-rule coverage, universal project compatibility, clean-Mac installation, or a successful live Claude call. Maven/custom commands currently have weaker automatic discovery assurance than the recommended Playwright JSON command; the Java validation above inspects actual Maven/Surefire results. The distributed app is **ad-hoc signed and unnotarized**, without Developer ID trust.
+
+## 0.4.0 browser runtime release checks
+
+- Local `npm run check`: 174 tests passed, TypeScript and formatting passed, production build passed. Includes crash-to-healthy-browser recovery, readiness failure cleanup, cancellation, explicit policy stopping, first-line missing-browser classification, environment isolation, strict report privacy/restoration, bundle path/version/architecture validation and signature/resource rejection.
+- The Apple Silicon ZIP includes the full pinned Chromium app (349 files and 17 Mach-O binaries at preparation) and passes deep/strict signing verification before archiving and after extraction.
+- `npm run test:packaged` extracts the real release ZIP to a path containing spaces, starts with fresh app data, an empty Playwright cache and no Node on the app's PATH, records a synthetic website exactly once, saves the case, exports/restores the safe startup report and checks the connected source is unchanged. It also checks unavailable-site error export and startup cancellation.
+- `.github/workflows/ci.yml` runs all checks, builds the full ZIP, verifies its browser payload and records from it on separate native macOS 14 ARM and macOS 15 Intel runners. Verified ZIPs are retained as workflow artifacts. Consult the release's exact commit and CI result for completed native-platform evidence; a local cross-build is not a physical Intel validation.
+
+The old screenshot cannot reveal the original process exit cause. These checks establish repair of identified startup/release defects, not operation under every device policy, OS version or network configuration. Real Chrome/Edge fallback selection is covered with fault-injected launch tests; the clean-install gate requires the included Testloom Chromium to be the successful browser. There is still no Developer ID notarization.

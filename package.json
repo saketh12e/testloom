@@ -1,6 +1,6 @@
 {
   "name": "testloom",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Turn recorded browser journeys into editable test suites with Codex and Claude.",
   "license": "MIT",
   "author": "Testloom contributors",
@@ -16,13 +16,14 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run format:check && npm run typecheck && npm test && npm run build",
     "browsers": "playwright install chromium",
-    "package:mac": "npm run build && electron-builder --mac dir --publish never",
-    "dist:mac": "npm run build && electron-builder --mac zip --publish never",
+    "package:mac": "node scripts/package-mac.mjs dir",
+    "dist:mac": "node scripts/package-mac.mjs zip",
     "test:journey": "tsx tests/journey.integration.ts",
     "test:desktop": "tsx tests/desktop.e2e.ts",
     "test:suite": "tsx tests/suite.integration.ts",
     "format": "prettier --write src tests scripts",
-    "format:check": "prettier --check src tests scripts"
+    "format:check": "prettier --check src tests scripts",
+    "test:packaged": "tsx tests/packaged-browser.integration.ts"
   },
   "dependencies": {
     "playwright": "1.63.0"
@@ -62,7 +63,8 @@
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "minimumSystemVersion": "14.0.0"
     },
     "extraResources": [
       {
@@ -74,6 +76,10 @@
           "!test-results/**/*",
           "!playwright-report/**/*"
         ]
+      },
+      {
+        "from": "work/recording-browser-${version}-${arch}",
+        "to": "recording-browser"
       }
     ],
     "afterSign": "scripts/verify-mac-signature.mjs",

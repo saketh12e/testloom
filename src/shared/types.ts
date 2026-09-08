@@ -1,3 +1,4 @@
+import type { BrowserStartupReport } from '../core/browser-diagnostics';
 export type Framework = 'playwright-ts' | 'playwright-java' | 'selenium-java' | 'unknown';
 export interface TestCommand {
   executable: string;
@@ -141,6 +142,8 @@ export interface RunRecord {
   fileCount: number;
 }
 export interface AppState {
+  browserStartup?: BrowserStartupReport;
+  browserStartupProgress?: string;
   project?: Project;
   scenario?: Scenario;
   generation?: Generation;
@@ -167,6 +170,7 @@ export interface JourneyAPI {
     captureScreenshots: boolean;
   }): Promise<AppState>;
   stopRecording(): Promise<AppState>;
+  exportBrowserStartupReport(): Promise<string | null>;
   saveScenario(input: { name: string; assertions: Assertion[] }): Promise<AppState>;
   generate(input: { mode: AgentProvider; model?: string; caseIds?: string[] }): Promise<AppState>;
   saveCase(input: TestCase): Promise<AppState>;

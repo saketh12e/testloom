@@ -7,6 +7,7 @@ const api: JourneyAPI = {
   loadDemo: () => ipcRenderer.invoke('journey:load-demo'),
   startRecording: (input) => ipcRenderer.invoke('journey:start-recording', input),
   stopRecording: () => ipcRenderer.invoke('journey:stop-recording'),
+  exportBrowserStartupReport: () => ipcRenderer.invoke('journey:export-browser-startup-report'),
   saveScenario: (input) => ipcRenderer.invoke('journey:save-scenario', input),
   saveCase: (input) => ipcRenderer.invoke('journey:save-case', input),
   duplicateCase: (input) => ipcRenderer.invoke('journey:duplicate-case', input),

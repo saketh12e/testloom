@@ -27,6 +27,7 @@ import type {
   RunRecord,
   AgentSessionRecord,
 } from '../shared/types';
+import { parseBrowserStartupReport, type BrowserStartupReport } from './browser-diagnostics';
 import { BrowserRecorder } from './recorder';
 import { demoCases } from './demo';
 import {
@@ -62,6 +63,7 @@ export class JourneyService extends EventEmitter {
   constructor(
     readonly root: string,
     readonly exampleRoot: string,
+    private readonly runtime: { browserBundleRoot?: string } = {},
   ) {
     super();
     this.state = {
@@ -100,6 +102,12 @@ export class JourneyService extends EventEmitter {
         phase: 'idle',
         error: undefined,
       };
+      restored.browserStartupProgress = undefined;
+      try {
+        restored.browserStartup = parseBrowserStartupReport(restored.browserStartup);
+      } catch {
+        restored.browserStartup = undefined;
+      }
       restored.settings = validateAgentSettings(restored.settings);
       if (restored.project?.outputDir === 'tests/journeyproof')
         restored.project.outputDir = 'tests/testloom';
@@ -581,6 +589,12 @@ export class JourneyService extends EventEmitter {
       checkCancelled();
       const recorder = new BrowserRecorder({
         artifactDir,
+        browserBundleRoot: this.runtime.browserBundleRoot,
+        onStartupReport: (report) => this.saveBrowserStartupReport(report),
+        onProgress: (message) => {
+          this.state.browserStartupProgress = message;
+          this.emitState();
+        },
         onEvent: (event) => {
           scenario.events.push(event);
           this.emitState();
@@ -616,6 +630,25 @@ export class JourneyService extends EventEmitter {
       this.endOperation();
     }
     return this.state;
+  }
+  private async saveBrowserStartupReport(report: BrowserStartupReport): Promise<void> {
+    this.state.browserStartup = parseBrowserStartupReport(report);
+    this.emitState();
+    const directory = path.join(this.root, 'diagnostics');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const temporary = path.join(directory, `browser-startup-${report.id}.tmp`);
+    await writeFile(temporary, JSON.stringify(this.state.browserStartup, null, 2) + '\n', {
+      mode: 0o600,
+      flag: 'wx',
+    });
+    await rename(temporary, path.join(directory, 'browser-startup.json'));
+  }
+  async exportBrowserStartupReportTo(filename: string): Promise<string> {
+    if (!this.state.browserStartup)
+      throw new Error('Start a recording first to create a startup report.');
+    const report = parseBrowserStartupReport(this.state.browserStartup);
+    await writeFile(filename, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
+    return filename;
   }
   async stopRecording(): Promise<AppState> {
     if (this.recordingStop) return this.recordingStop;

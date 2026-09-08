@@ -179,7 +179,9 @@ async function perform(label: string, action: () => Promise<unknown>): Promise<b
     await action();
     return true;
   } catch (error) {
-    report(error, `${label} couldn’t finish`);
+    if (label === 'Starting recording' && /Recording cancelled\./.test(String(error)))
+      toast('Recording cancelled.');
+    else report(error, `${label} couldn’t finish`);
     return false;
   } finally {
     pending = '';
@@ -447,8 +449,17 @@ function renderControls() {
     ready && !!activeCase() && !!session && session.status !== 'running',
   );
   text('settings-save-status', settingsDirty ? 'Unsaved settings' : 'All settings saved');
-  enable('close-record', !pending);
-  enable('cancel-record', !pending);
+  const startingRecording = pending === 'Starting recording';
+  enable('close-record', !pending || startingRecording);
+  enable('cancel-record', !pending || startingRecording);
+  text('cancel-record', pending === 'Cancelling recording' ? 'Cancelling…' : 'Cancel');
+  text(
+    'browser-startup-progress',
+    state?.browserStartupProgress || (startingRecording ? 'Preparing your recording browser…' : ''),
+  );
+  show('browser-startup-progress', startingRecording);
+  show('browser-startup-help', !pending && !!state?.browserStartup && !$('record-error').hidden);
+  enable('export-browser-startup', !pending && !!state?.browserStartup);
   enable('confirm-accept', !pending);
   enable('confirm-cancel', !pending);
 }
@@ -1378,6 +1389,7 @@ function openRecord() {
     input('capture-screenshots').checked = false;
     show('screenshot-help', false);
     show('record-error', false);
+    show('browser-startup-help', false);
     dialog('record-dialog').showModal();
     window.setTimeout(() => input('record-name').focus(), 0);
   });
@@ -1469,13 +1481,40 @@ $('load-demo').addEventListener('click', () => {
   });
 });
 ['record-button', 'empty-record'].forEach((id) => $(id).addEventListener('click', openRecord));
+async function cancelRecordingDialog() {
+  if (!pending) {
+    dialog('record-dialog').close();
+    return;
+  }
+  if (pending !== 'Starting recording' || !api) return;
+  pending = 'Cancelling recording';
+  renderControls();
+  try {
+    await callState(() => api!.cancelRun());
+    dialog('record-dialog').close();
+  } catch (error) {
+    report(error, 'Cancellation couldn’t finish');
+  } finally {
+    pending = '';
+    render();
+  }
+}
 ['close-record', 'cancel-record'].forEach((id) =>
-  $(id).addEventListener('click', () => {
-    if (!pending) dialog('record-dialog').close();
-  }),
+  $(id).addEventListener('click', () => void cancelRecordingDialog()),
 );
 dialog('record-dialog').addEventListener('cancel', (event) => {
-  if (pending) event.preventDefault();
+  if (pending) {
+    event.preventDefault();
+    void cancelRecordingDialog();
+  }
+});
+$('export-browser-startup').addEventListener('click', async () => {
+  if (!api || pending) return;
+  try {
+    if (await api.exportBrowserStartupReport()) toast('Startup report exported.');
+  } catch (error) {
+    report(error, 'The startup report couldn’t be exported');
+  }
 });
 input('capture-screenshots').addEventListener('change', () =>
   show('screenshot-help', input('capture-screenshots').checked),

@@ -4,7 +4,7 @@
 
 The v0.2.0 download was packaged without a complete app-bundle signature. Its main executable retained a linker signature, and `codesign --verify --deep --strict` failed with `code has no resources but signature indicates they must be present`. A friend reported macOS's “damaged and can't be opened” alert. Running the app on the build Mac did not catch this distribution problem.
 
-Use the **v0.3.1 Apple Silicon download** from [the public release](https://github.com/saketh12e/testloom/releases/tag/v0.3.1). Quit Testloom, unzip the new download, and replace **Testloom.app** in Applications. This replaces the app, not the case library in Application Support. Intel Macs need to build from source on their own Mac.
+Use the **v0.4.0 download for your Mac processor** from [the public release](https://github.com/saketh12e/testloom/releases/tag/v0.4.0). Quit Testloom, unzip the new download, and replace **Testloom.app** in Applications. This replaces the app, not the case library in Application Support. Use mac-arm64 for Apple Silicon and mac-x64 for Intel. Both require macOS 14 or later and include the recording browser.
 
 The new package has a complete **ad-hoc code signature** and is verified again after ZIP extraction. This checks integrity; it does **not** identify an Apple-approved developer or provide notarization. It remains a developer preview and can still be blocked by Gatekeeper.
 
@@ -44,4 +44,4 @@ For a preview that you build yourself, use the source instructions in [Getting s
 
 Warning-free distribution requires an Apple Developer ID Application certificate, hardened-runtime signing, notarization and stapling. No valid signing identity was available on the release Mac. The release must not be described as notarized or as verified on another user's Mac until those checks actually pass. See [electron-builder's signing documentation for v26](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/).
 
-The packaging hooks now reject an invalid signature before archiving and again after extracting the ZIP. CI builds a Mac ZIP. A regression fixture also proves that an incomplete signature or a resource changed after signing fails the release check.
+The packaging hooks now reject an invalid signature before archiving and again after extracting the ZIP. CI builds and records from separate native Apple Silicon and Intel Mac ZIPs, with an empty browser cache. A regression fixture also proves that an incomplete signature or a resource changed after signing fails the release check.
