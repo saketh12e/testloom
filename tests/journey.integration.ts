@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,12 +25,22 @@ const summaryPath = path.join(repo, 'work/verification-integration.json');
 const startUrl = 'http://127.0.0.1:4318/';
 const command = { executable: 'npm', args: ['test'], label: 'Cart generated journey integration' };
 
-async function sourceDigest(): Promise<string> {
-  // Same source-file boundary as the production snapshot; excludes dependencies
-  // and test artifacts that the owner's independent checks may create.
-  const hash = createHash('sha256');
-  for (const file of await listProjectFiles(source))
-    hash.update(file).update(await readFile(path.join(source, file)));
+async function sourceDigest(root = source): Promise<string> {
+  // Independently calculate the documented manifest from actual bytes and modes.
+  // Dependencies and test artifacts remain outside the source-file boundary.
+  const hash = createHash('sha256').update('sha256-sorted-file-manifest-v1\0');
+  for (const file of (await listProjectFiles(root)).sort()) {
+    const bytes = await readFile(path.join(root, file));
+    const mode = (await lstat(path.join(root, file))).mode & 0o7777;
+    hash.update(
+      JSON.stringify([
+        file.split(path.sep).join('/'),
+        mode,
+        bytes.length,
+        createHash('sha256').update(bytes).digest('hex'),
+      ]) + '\n',
+    );
+  }
   return hash.digest('hex');
 }
 
@@ -119,6 +129,7 @@ async function main(): Promise<void> {
     const recordingCopy = path.join(temp, 'recording-source');
     const recordingSnapshot = await snapshotProject(project, recordingCopy);
     assert.equal(recordingSnapshot.digest, before);
+    assert.equal(await sourceDigest(recordingCopy), before);
     await requireFreePort();
     const serverEnv: NodeJS.ProcessEnv = {
       ...process.env,
@@ -224,6 +235,7 @@ async function main(): Promise<void> {
     assert(code.includes('getByTestId("total")).toHaveText("$90.00")'));
     const snapshot = await snapshotProject(project, workspace);
     assert.equal(snapshot.digest, before);
+    assert.equal(await sourceDigest(workspace), before);
     summary.snapshot = snapshot;
     summary.generatedFiles = generated.files;
     const patch = await writeGeneratedFiles(workspace, generated.files, project.outputDir);
