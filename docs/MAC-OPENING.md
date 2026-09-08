@@ -4,7 +4,7 @@
 
 The v0.2.0 download was packaged without a complete app-bundle signature. Its main executable retained a linker signature, and `codesign --verify --deep --strict` failed with `code has no resources but signature indicates they must be present`. A friend reported macOS's “damaged and can't be opened” alert. Running the app on the build Mac did not catch this distribution problem.
 
-Use the **v0.2.1 Apple Silicon download** from [the public release](https://github.com/saketh12e/testloom/releases/tag/v0.2.1). Quit Testloom, unzip the new download, and replace **Testloom.app** in Applications. This replaces the app, not the case library in Application Support. Intel Macs need to build from source on their own Mac.
+Use the **v0.3.0 Apple Silicon download** from [the public release](https://github.com/saketh12e/testloom/releases/tag/v0.3.0). Quit Testloom, unzip the new download, and replace **Testloom.app** in Applications. This replaces the app, not the case library in Application Support. Intel Macs need to build from source on their own Mac.
 
 The new package has a complete **ad-hoc code signature** and is verified again after ZIP extraction. This checks integrity; it does **not** identify an Apple-approved developer or provide notarization. It remains a developer preview and can still be blocked by Gatekeeper.
 
@@ -14,10 +14,10 @@ The new package has a complete **ad-hoc code signature** and is verified again a
 
    ```sh
    cd ~/Downloads
-   shasum -a 256 Testloom-0.2.1-mac-arm64.zip
+   shasum -a 256 Testloom-0.3.0-mac-arm64.zip
    ```
 
-   Compare the result with the app's line in **TESTLOOM-0.2.1-SHA256SUMS.txt** on that release.
+   Compare the result with the app's line in **TESTLOOM-0.3.0-SHA256SUMS.txt** on that release.
 
 2. After moving the app to Applications, verify its signature:
 

@@ -1,6 +1,6 @@
 # Contributing to Testloom
 
-Small, reviewable contributions are welcome under the [MIT license](LICENSE). The repository is moving to [saketh12e/testloom](https://github.com/saketh12e/testloom), preserving its JourneyProof redirects. Read the [architecture](docs/ARCHITECTURE.md), [suite contract](docs/SCENARIO-FORMAT.md) and [limitations](docs/LIMITATIONS.md) before changing behavior.
+Small, reviewable contributions are welcome under the [MIT license](LICENSE). The repository is [saketh12e/testloom](https://github.com/saketh12e/testloom); its JourneyProof URL redirects here. Read the [architecture](docs/ARCHITECTURE.md), [suite contract](docs/SCENARIO-FORMAT.md) and [limitations](docs/LIMITATIONS.md) before changing behavior.
 
 ## Development
 
@@ -45,7 +45,7 @@ TESTLOOM_AGENT=codex npx tsx tests/agent.integration.ts
 TESTLOOM_AGENT=claude npx tsx tests/agent.integration.ts
 ```
 
-Report each provider separately; a successful Codex check does not validate Claude.
+Report each provider separately; a successful Codex check does not validate Claude. For native screenshot, repository-read and resumed-memory behavior, run `TESTLOOM_LIVE_SESSION=codex npx tsx tests/session.integration.ts`. The opt-in large-folder benchmark is `npx tsx tests/repository-scale.integration.ts`; it creates and removes 100,000 real source files and reports copy/hash time separately from fixture setup and verification.
 
 ## Change the contract with care
 

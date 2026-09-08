@@ -1,6 +1,6 @@
 {
   "name": "testloom",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Turn recorded browser journeys into editable test suites with Codex and Claude.",
   "license": "MIT",
   "author": "Testloom contributors",

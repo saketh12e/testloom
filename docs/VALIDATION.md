@@ -1,5 +1,32 @@
 # Release validation
 
+## 0.3.0 native sessions and large repositories — 2026-09-08
+
+Checked with Codex CLI **0.153.4**, Claude Code CLI **2.1.116**, Electron **44.2.0** and Node **22.22.3** on an Apple Silicon Mac. Results below distinguish deterministic checks, live model behavior and packaged runtime checks.
+
+| Check | Observed result |
+| --- | --- |
+| `npm run check` | Formatting, type checking, **112 regression tests**, and production build passed. |
+| Packaged desktop workflow | **500 saved cases**, three-case generation, recording, repeated verification and export passed, with **zero renderer errors**. Maximum effort was the fresh default and persisted through the Claude settings UI. |
+| Live Codex session | Two turns in the **same native session across separate adapter invocations**. Codex read an unpredictable backend value through repository tools, recognized an unpredictable value present only in a screenshot, and recalled prior text/image values on resume without reattachment. It also read an updated backend value. The advertised maximum was **`ultra`**. Source bytes unchanged. |
+| Live Codex test generation | Positive and negative coupon tests were discovered and passed **two healthy runs**. The unchanged positive test detected the deliberate **$90.00 expected / $95.00 received** discount defect. Original source unchanged. |
+| Claude adapter | Native session creation with maximum effort and image input was observed. The configured API returned **HTTP 401**; no generated file, successful live repository grounding or image understanding is claimed. Authentication and routing were not changed. Deterministic session, image, MCP, cancellation and response tests passed. |
+| Large-repository fixture | **100,000 actual tiny TypeScript files plus package.json**: inspect **166 ms**, copy/hash including fresh scan **22,716 ms**, peak process RSS **166.28 MiB**. All 100,001 copies independently checked; expected manifest digest matched. Streaming fallback exercised; native cloning unavailable. [Full scope](LARGE-REPOSITORIES.md) and [sanitized measurement record](benchmarks/repository-100000.json). |
+| Packaged Claude repository server | The released app's Electron Node runtime loaded the server from `app.asar`, completed MCP initialization, listed all four tools and successfully read fixture source. This is runtime/tool evidence, not a successful Claude API response. |
+| Mac ZIP integrity | Ad-hoc signatures passed deep/strict verification on the bundle and again after ZIP extraction. Developer ID signing, notarization and a clean recipient-Mac install remain unverified. |
+
+New regressions cover native session ownership, restart and folder reconnect, per-case/provider separation, reset and exclusion changes, late scan cancellation, stale turn rejection, read-only repository tools, source/screenshot path checks, bounded pagination and streaming, and source-preserving snapshots. The public service workflow verifies that Generate does not automatically start test execution or modify original source.
+
+Reproduce the additional checks:
+
+```sh
+npx tsx tests/repository-scale.integration.ts
+TESTLOOM_LIVE_SESSION=codex npx tsx tests/session.integration.ts
+TESTLOOM_AGENT=codex npx tsx tests/agent.integration.ts
+```
+
+The large-file-count fixture is synthetic and has only 3.28 MB of content; it does not establish performance on a 50 GB production repository. Live checks consume account usage. Java compilation evidence below belongs to v0.2; it was not rerun for this release. The v0.3 desktop checks exercise Portable generation, while the separate live checks exercise Codex. No successful live Claude generation is claimed.
+
 ## 0.2.1 packaging repair — 2026-09-07
 
 The v0.2.0 app failed `codesign --verify --deep --strict`: **code has no resources but signature indicates they must be present**. A recipient reported macOS's damaged-app alert. The earlier local app workflow did not test downloaded-app trust.
@@ -77,4 +104,4 @@ Working reports under ignored `work/` contain the actual local run data; source 
 
 ## Limits of the evidence
 
-These tests cover the stated sample behaviors, protocol boundaries, and demonstrated library/batch sizes. They do not establish complete business-rule coverage, universal project compatibility, clean-Mac installation, or a successful live Claude call. Maven/custom commands currently have weaker automatic discovery assurance than the recommended Playwright JSON command; the Java validation above inspects actual Maven/Surefire results. The distributed app is **unsigned and unnotarized**.
+These tests cover the stated sample behaviors, protocol boundaries, and demonstrated library/batch sizes. They do not establish complete business-rule coverage, universal project compatibility, clean-Mac installation, or a successful live Claude call. Maven/custom commands currently have weaker automatic discovery assurance than the recommended Playwright JSON command; the Java validation above inspects actual Maven/Surefire results. The distributed app is **ad-hoc signed and unnotarized**, without Developer ID trust.

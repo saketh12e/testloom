@@ -1,5 +1,15 @@
 import { EventEmitter } from 'node:events';
-import { mkdir, readFile, writeFile, copyFile, cp, rename, stat, realpath } from 'node:fs/promises';
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  copyFile,
+  cp,
+  rename,
+  stat,
+  lstat,
+  realpath,
+} from 'node:fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomUUID, createHash } from 'node:crypto';
@@ -15,6 +25,7 @@ import type {
   AgentProvider,
   GeneratedFile,
   RunRecord,
+  AgentSessionRecord,
 } from '../shared/types';
 import { BrowserRecorder } from './recorder';
 import { demoCases } from './demo';
@@ -61,6 +72,7 @@ export class JourneyService extends EventEmitter {
       cases: [],
       settings: structuredClone(DEFAULT_AGENT_SETTINGS),
       history: [],
+      agentSessions: [],
       workspaceRoot: root,
     };
   }
@@ -95,6 +107,7 @@ export class JourneyService extends EventEmitter {
         restored.project.outputDir = 'src/test/java/testloom';
       restored.cases = (restored.cases || []).map(validateCase);
       restored.history = Array.isArray(restored.history) ? restored.history.slice(0, 100) : [];
+      restored.agentSessions = this.restoreAgentSessions(restored.agentSessions, restored.cases);
       if (
         saved.phase === 'recording' &&
         !restored.activeCaseId &&
@@ -152,6 +165,135 @@ export class JourneyService extends EventEmitter {
       createHash('sha256').update(folder).digest('hex') + '.json',
     );
   }
+  private restoreAgentSessions(value: unknown, cases: TestCase[]): AgentSessionRecord[] {
+    if (!Array.isArray(value)) return [];
+    const allowed = new Set(cases.map((c) => c.id));
+    const seen = new Set<string>();
+    return value
+      .slice(0, 1000)
+      .filter((s) => {
+        if (
+          !s ||
+          !allowed.has(s.caseId) ||
+          !['codex', 'claude'].includes(s.provider) ||
+          typeof s.id !== 'string' ||
+          !/^[a-zA-Z0-9_-]{1,160}$/.test(s.id) ||
+          typeof s.cwd !== 'string' ||
+          !path
+            .resolve(s.cwd)
+            .startsWith(path.join(path.resolve(this.root), 'agent-sessions') + path.sep) ||
+          !Number.isInteger(s.turns) ||
+          s.turns < 0
+        )
+          return false;
+        const key = s.caseId + ':' + s.provider;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((s) => ({
+        ...s,
+        status: s.status === 'running' ? 'failed' : s.status,
+        ...(s.status === 'running'
+          ? { lastError: 'The previous turn was interrupted. Resume or start a fresh session.' }
+          : {}),
+      }));
+  }
+  private contextKey(settings: AgentSettings): string {
+    return createHash('sha256')
+      .update(JSON.stringify([...settings.excludedContextPaths].sort()))
+      .digest('hex');
+  }
+  private async caseSession(
+    caseId: string,
+    settings: AgentSettings,
+  ): Promise<{ id?: string; cwd: string }> {
+    const projectKey = createHash('sha256').update(this.state.project!.path).digest('hex');
+    const base = path.join(this.root, 'agent-sessions', projectKey, caseId, settings.provider);
+    let previous = this.state.agentSessions?.find(
+      (s) => s.caseId === caseId && s.provider === settings.provider,
+    );
+    if (
+      previous &&
+      (previous.contextKey !== this.contextKey(settings) ||
+        !path.resolve(previous.cwd).startsWith(path.resolve(base) + path.sep))
+    ) {
+      this.state.agentSessions = this.state.agentSessions?.filter((s) => s !== previous);
+      previous = undefined;
+      this.log(
+        'Starting a fresh session because context exclusions changed. Prior history remains in the agent’s own storage.',
+      );
+    }
+    const cwd = previous?.cwd ?? path.join(base, randomUUID());
+    const relative = path.relative(this.root, cwd);
+    let current = this.root;
+    for (const part of relative.split(path.sep)) {
+      current = path.join(current, part);
+      try {
+        const info = await lstat(current);
+        if (info.isSymbolicLink() || !info.isDirectory())
+          throw new Error('Session storage is not a regular directory.');
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') throw error;
+        await mkdir(current, { mode: 0o700 });
+      }
+    }
+    return { ...(previous ? { id: previous.id } : {}), cwd };
+  }
+  async resetAgentSession(input: {
+    caseId: string;
+    provider: 'codex' | 'claude';
+  }): Promise<AppState> {
+    this.idle();
+    if (
+      !this.state.cases.some((c) => c.id === input?.caseId) ||
+      !['codex', 'claude'].includes(input?.provider)
+    )
+      throw new Error('Choose a case and coding agent first.');
+    this.state.agentSessions = this.state.agentSessions?.filter(
+      (s) => s.caseId !== input.caseId || s.provider !== input.provider,
+    );
+    this.log(
+      'The next generation will start a fresh case session. Previous agent history is retained locally.',
+    );
+    return this.state;
+  }
+  private async caseEvidenceImages(testCase: TestCase) {
+    const images: { path: string; mimeType: 'image/png' | 'image/jpeg'; label: string }[] = [];
+    const events = testCase.scenario.events.filter((e) => e.screenshot);
+    if (!events.length) return images;
+    if (events.length > 100)
+      throw new Error(
+        'This case has more than 100 screenshots. Split it into smaller cases before sending all its evidence.',
+      );
+    const base = await realpath(path.join(this.root, 'recordings', testCase.recordingId));
+    let bytes = 0;
+    for (const event of events) {
+      const file = event.screenshot!;
+      const actual = await realpath(file);
+      const info = await lstat(file);
+      if (
+        !actual.startsWith(base + path.sep) ||
+        info.isSymbolicLink() ||
+        !info.isFile() ||
+        !/\.(png|jpe?g)$/i.test(actual)
+      )
+        throw new Error(
+          'A recorded screenshot is unavailable or outside its recording. Record the case again before sending it.',
+        );
+      bytes += info.size;
+      if (info.size > 10_000_000 || bytes > 50_000_000)
+        throw new Error(
+          'Screenshot evidence exceeds the 50 MB case upload limit. Split the recording into smaller cases; no screenshots have been silently omitted.',
+        );
+      images.push({
+        path: actual,
+        mimeType: /\.png$/i.test(actual) ? 'image/png' : 'image/jpeg',
+        label: `Recorded event ${event.sequence}: ${event.action}. ${scrubText(event.label)}`,
+      });
+    }
+    return images;
+  }
   private emitState(): void {
     this.emit('update', structuredClone(this.state));
     const snapshot = JSON.stringify(this.state, null, 2);
@@ -202,50 +344,71 @@ export class JourneyService extends EventEmitter {
   }
   async connect(folder: string): Promise<AppState> {
     this.idle();
-    await this.stopDemo();
-    const project = await inspectProject(folder);
-    await this.persistQueue;
-    let library: Partial<AppState> = {};
+    this.state.phase = 'indexing';
+    this.controller = new AbortController();
+    this.beginOperation();
+    this.log('Inspecting the project folder. Source files remain unchanged.');
     try {
-      const saved = JSON.parse(await readFile(this.projectSessionPath(project.path), 'utf8'));
-      if (saved.project?.path === project.path) {
-        library = {
-          cases: saved.cases.map(validateCase),
-          activeCaseId: saved.activeCaseId,
-          scenario: saved.scenario,
-          history: saved.history || [],
-        };
-        if (
-          saved.project.isDemo &&
-          project.path.startsWith(path.join(this.root, 'samples') + path.sep) &&
-          Number.isInteger(saved.project.demoPort) &&
-          saved.project.demoPort > 0 &&
-          saved.project.demoPort < 65536
-        ) {
-          project.isDemo = true;
-          project.demoPort = saved.project.demoPort;
+      await this.stopDemo();
+      const project = await inspectProject(folder, {
+        signal: this.controller.signal,
+        onProgress: (progress) =>
+          this.log(`Indexed ${progress.fileCount.toLocaleString()} source files.`),
+      });
+      await this.persistQueue;
+      let library: Partial<AppState> = {};
+      try {
+        const saved = JSON.parse(await readFile(this.projectSessionPath(project.path), 'utf8'));
+        if (saved.project?.path === project.path) {
+          library = {
+            cases: saved.cases.map(validateCase),
+            activeCaseId: saved.activeCaseId,
+            scenario: saved.scenario,
+            history: saved.history || [],
+            agentSessions: this.restoreAgentSessions(
+              saved.agentSessions,
+              saved.cases.map(validateCase),
+            ),
+          };
+          if (
+            saved.project.isDemo &&
+            project.path.startsWith(path.join(this.root, 'samples') + path.sep) &&
+            Number.isInteger(saved.project.demoPort) &&
+            saved.project.demoPort > 0 &&
+            saved.project.demoPort < 65536
+          ) {
+            project.isDemo = true;
+            project.demoPort = saved.project.demoPort;
+          }
         }
+      } catch (error: any) {
+        if (error.code !== 'ENOENT')
+          throw new Error(
+            'The saved case library could not be opened. Its file has been preserved in the workspace libraries folder.',
+          );
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT')
-        throw new Error(
-          'The saved case library could not be opened. Its file has been preserved in the workspace libraries folder.',
-        );
+      this.controller.signal.throwIfAborted();
+      this.state = {
+        ...this.state,
+        project,
+        cases: [],
+        activeCaseId: undefined,
+        history: [],
+        agentSessions: [],
+        scenario: undefined,
+        generation: undefined,
+        verification: undefined,
+        error: undefined,
+        ...library,
+      };
+      this.log(`Connected ${project.name}. ${project.summary}.`);
+      return this.state;
+    } finally {
+      this.state.phase = 'idle';
+      this.controller = undefined;
+      this.emitState();
+      this.endOperation();
     }
-    this.state = {
-      ...this.state,
-      project,
-      cases: [],
-      activeCaseId: undefined,
-      history: [],
-      scenario: undefined,
-      generation: undefined,
-      verification: undefined,
-      error: undefined,
-      ...library,
-    };
-    this.log(`Connected ${project.name}. ${project.summary}.`);
-    return this.state;
   }
   async loadDemo(): Promise<AppState> {
     this.idle();
@@ -574,6 +737,7 @@ export class JourneyService extends EventEmitter {
     this.idle();
     if (!this.state.cases.some((c) => c.id === input.id)) throw new Error('Case not found.');
     this.state.cases = this.state.cases.filter((c) => c.id !== input.id);
+    this.state.agentSessions = this.state.agentSessions?.filter((s) => s.caseId !== input.id);
     if (this.state.generation?.caseIds?.includes(input.id)) this.invalidate();
     if (this.state.activeCaseId === input.id) {
       this.state.activeCaseId = this.state.cases[0]?.id;
@@ -727,7 +891,15 @@ export class JourneyService extends EventEmitter {
       `Preparing ${cases.length} case${cases.length === 1 ? '' : 's'} in an isolated source copy.`,
     );
     try {
-      await snapshotProject(this.state.project, workspace);
+      await snapshotProject(this.state.project, workspace, {
+        signal: this.controller.signal,
+        onProgress: (progress) =>
+          this.log(
+            progress.phase === 'scan'
+              ? `Scanning repository: ${progress.fileCount.toLocaleString()} source files.`
+              : `Preparing isolated copy: ${progress.fileCount.toLocaleString()} of ${progress.totalFiles?.toLocaleString() ?? '?'} files.`,
+          ),
+      });
       const files: GeneratedFile[] = [];
       const warnings: string[] = [];
       const caseFiles: Record<string, string[]> = {};
@@ -739,13 +911,73 @@ export class JourneyService extends EventEmitter {
         if (this.controller.signal.aborted) throw new Error('Generation cancelled.');
         this.log(`Authoring ${index + 1} of ${cases.length}: ${testCase.name} (${testCase.kind}).`);
         const project = this.caseProject(testCase);
+        const evidenceImages =
+          settings.provider === 'portable' ? [] : await this.caseEvidenceImages(testCase);
+        const session =
+          settings.provider === 'portable'
+            ? undefined
+            : await this.caseSession(testCase.id, settings);
+        let sessionRecord: AgentSessionRecord | undefined;
         const result =
           settings.provider === 'portable'
             ? portableGenerate(project, testCase.scenario)
             : await generateWithAgent(project, testCase.scenario, workspace, settings, {
                 signal: this.controller.signal,
+                session,
+                evidenceImages,
+                onSession: (nativeId) => {
+                  const now = new Date().toISOString();
+                  sessionRecord = this.state.agentSessions?.find(
+                    (s) => s.caseId === testCase.id && s.provider === settings.provider,
+                  );
+                  if (sessionRecord && sessionRecord.id !== nativeId)
+                    throw new Error('Agent returned a different case session.');
+                  if (!sessionRecord) {
+                    sessionRecord = {
+                      caseId: testCase.id,
+                      provider: settings.provider as 'codex' | 'claude',
+                      id: nativeId,
+                      cwd: session!.cwd,
+                      createdAt: now,
+                      updatedAt: now,
+                      turns: 0,
+                      status: 'running',
+                      contextKey: this.contextKey(settings),
+                    };
+                    (this.state.agentSessions ??= []).push(sessionRecord);
+                  }
+                  Object.assign(sessionRecord, {
+                    updatedAt: now,
+                    status: 'running',
+                    lastError: undefined,
+                  });
+                  this.emitState();
+                },
                 onProgress: (message) => this.log(message),
               });
+        if (sessionRecord) {
+          sessionRecord.turns++;
+          sessionRecord.status = 'ready';
+          sessionRecord.updatedAt = new Date().toISOString();
+          await writeFile(
+            path.join(sessionRecord.cwd, 'case-memory.json'),
+            JSON.stringify(
+              {
+                caseId: testCase.id,
+                provider: sessionRecord.provider,
+                sessionId: sessionRecord.id,
+                latestRequirements: testCase.scenario.assertions,
+                summary: result.summary,
+                generatedFiles: result.files.map((f) => f.path),
+                verification: 'Not run for this generation',
+              },
+              null,
+              2,
+            ),
+            { mode: 0o600 },
+          );
+          this.emitState();
+        }
         files.push(...result.files);
         caseFiles[testCase.id] = result.files.map((f) => f.path);
         warnings.push(...result.warnings);
@@ -797,6 +1029,17 @@ export class JourneyService extends EventEmitter {
       this.log(`${summary} Review the code, then verify.`);
     } catch (error) {
       record.summary = error instanceof Error ? error.message : String(error);
+      for (const session of this.state.agentSessions ?? []) {
+        if (
+          session.status === 'running' &&
+          ids.includes(session.caseId) &&
+          session.provider === settings.provider
+        ) {
+          session.status = 'failed';
+          session.lastError = record.summary;
+          session.updatedAt = new Date().toISOString();
+        }
+      }
       throw error;
     } finally {
       this.state.history = [record, ...this.state.history].slice(0, 100);

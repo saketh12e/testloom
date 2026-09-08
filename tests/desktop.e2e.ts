@@ -44,6 +44,7 @@ try {
   await mkdir('assets', { recursive: true });
   await window.screenshot({ path: 'assets/overview.png', style: '#toast { visibility: hidden; }' });
   assert.equal((await state(window)).settings.provider, 'codex');
+  assert.equal((await state(window)).settings.effort, 'max');
   await window.locator('#load-demo').click();
   let current = await settled(window, (s) => s.cases.length === 3);
   await window.getByTestId('case-row').nth(2).waitFor();
@@ -80,7 +81,7 @@ try {
   assert.deepEqual(current.cases.at(-1)?.scenario.assertions, current.cases[1].scenario.assertions);
   await window.locator('#open-settings').click();
   await window.locator('#generator-mode').selectOption('claude');
-  await window.locator('#agent-effort').selectOption('high');
+  await window.locator('#agent-effort').selectOption('max');
   await window.locator('#agent-timeout').fill('90');
   await window.locator('#claude-budget').fill('0.50');
   await window
@@ -89,7 +90,10 @@ try {
   await window.locator('#save-settings').click();
   await settled(
     window,
-    (s) => s.settings.provider === 'claude' && s.settings.timeoutSeconds === 90,
+    (s) =>
+      s.settings.provider === 'claude' &&
+      s.settings.effort === 'max' &&
+      s.settings.timeoutSeconds === 90,
   );
   await window.locator('#preview-prompt').click();
   await window.locator('#prompt-preview').filter({ hasText: 'EXPIRED' }).waitFor();

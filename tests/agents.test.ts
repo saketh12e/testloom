@@ -126,6 +126,8 @@ test('settings normalize defaults without sharing mutable arrays and enforce bou
   assert.deepEqual(DEFAULT_AGENT_SETTINGS.excludedContextPaths, []);
   assert.deepEqual(validateAgentSettings({}).excludedContextPaths, []);
   assert.equal(setting({ model: ' haiku ' }).model, 'haiku');
+  assert.equal(setting({ effort: 'max' }).effort, 'max');
+  assert.equal(DEFAULT_AGENT_SETTINGS.effort, 'max');
   assert.equal(setting({ model: 'claude-sonnet-4-6[1m]' }).model, 'claude-sonnet-4-6[1m]');
   assert.deepEqual(
     setting({ excludedContextPaths: ['./tests/private/', 'tests\\private', '**/*.secret.ts'] })
@@ -137,7 +139,7 @@ test('settings normalize defaults without sharing mutable arrays and enforce bou
     [],
     'claude',
     { provider: 'other' },
-    { effort: 'max' },
+    { effort: 'unlimited' },
     { model: '--dangerously-skip-permissions' },
     { model: 'haiku;echo x' },
     { model: 'x'.repeat(161) },

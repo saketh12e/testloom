@@ -1,6 +1,6 @@
 # Limitations
 
-Testloom v0.2.1 is an **ad-hoc signed Apple Silicon developer preview**. It is not Apple Developer signed or notarized. Gatekeeper may still block it; see [Mac installation help](MAC-OPENING.md). The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
+Testloom v0.3.0 is an **ad-hoc signed Apple Silicon developer preview**. It is not Apple Developer signed or notarized. Gatekeeper may still block it; see [Mac installation help](MAC-OPENING.md). The [validation record](VALIDATION.md) describes actual version-specific checks, not universal framework support or production readiness. Capacity limits are not benchmark results.
 
 ## Recording and requirements
 
@@ -19,7 +19,9 @@ Testloom v0.2.1 is an **ad-hoc signed Apple Silicon developer preview**. It is n
 | Generation history | Latest 100 records, not a complete revision/audit log |
 | Per scenario | 500 events, 30 assertions, 2,000 network entries |
 | Suite import file | At most 5,000,000 bytes at the file boundary; structural validator additionally caps serialized data at 5 MiB |
-| Module snapshot | 8,000 included files; depth 16; 20,000,000 bytes per file; 250,000,000 bytes total |
+| Source snapshot | 1,000,000 included files; depth 64; 2 GiB per file; 50 GiB total. Measured fixture: 100,001 files, 3.28 MB total |
+| Screenshot attachments | App flow: 100 per case; 10 MB per image; 50 MB total. Oversized evidence stops generation |
+| Repository tools | 200 paths/results per page; read 64 KiB or 1,000 lines; grep 8 MiB / five seconds per call |
 | Cached context | Up to 30 files after explicit addition; 10,000 characters per file; added files at most 500,000 bytes |
 | Outgoing source context | Up to 30 excerpts and 150,000 source characters; whole prompt at most 300,000 UTF-8 bytes |
 | Agent generation | 30–1,800 seconds per case; Claude cap $0.01–$20 per case |
@@ -27,7 +29,7 @@ Testloom v0.2.1 is an **ad-hoc signed Apple Silicon developer preview**. It is n
 
 Limits can reject work before a full generation completes. Smaller cases and a focused test module are usually more useful than raising every budget.
 
-Project inspection detects npm/Maven/Gradle and framework clues heuristically. It caches selected tests, helpers and configuration at connection time; explicit additions are also cached. It does not ingest or continuously index the whole repository. Reconnect to refresh inspection and re-add files as needed. Excluded or truncated context is not evidence that a helper or requirement does not exist.
+Project inspection detects npm/Maven/Gradle and framework clues heuristically. It caches selected tests, helpers and configuration at connection time; explicit additions are also cached. A fresh source copy is browsable through read-only repository tools during generation; the entire repository is not put into one prompt or continuously semantically indexed. Reconnect to refresh inspection and re-add files as needed. Excluded or truncated context is not evidence that a helper or requirement does not exist.
 
 Libraries survive switching between the same canonical project folders. Moving a project changes its library key; use suite export/import. Raw recordings remain after case deletion, and history pruning does not clean old run folders. There is no automatic disk-retention policy, cloud synchronization or full edit-version history.
 
@@ -39,7 +41,7 @@ Codex and Claude use installed CLIs and the user's account configuration. Model/
 
 A source copy keeps app-generated writes away from the connected original, but **is not an OS sandbox**. Installation, tests, plugins, subprocesses and browser actions run with local user permissions. They can modify outside files, contact services or change remote state. Use trusted projects and disposable data where appropriate.
 
-Copies omit dependencies, build output, symlinks and recognizable credential files. Large modules, omitted configuration or symlink-based layouts need a smaller module or manual setup. Snapshot content is not comprehensively redacted. Prompt exclusions only filter outgoing source excerpts; they do not filter every artifact or restrict executed commands. A live folder copy is not an atomic snapshot of concurrent source edits.
+Copies omit dependencies, build output, symlinks and recognizable credential files. Large modules, omitted configuration or symlink-based layouts need a smaller module or manual setup. Snapshot content is not comprehensively redacted. Context exclusions filter outgoing excerpts and repository-tool reads; they do not filter every artifact or restrict manually selected test commands. Native transcripts retain previously transmitted context. Changing exclusions or resetting a session detaches that history rather than erasing it. A live folder copy is not an atomic snapshot of concurrent source edits.
 
 The recommended Playwright JSON-report check requires every reported spec and project variant in each generated file to pass once, with no reported errors or interruptions. It rejects missing/empty files, skips, expected failures and retries. It cannot independently enumerate unreported declarations, prove assertion completeness or protect against a malicious trusted runner. Java and custom commands have no equivalent built-in discovery adapter. Check their actual test names and assertions yourself. Missing tests, skips, environment failures, cancellation and timeouts are not semantic passes or defect-detection evidence.
 

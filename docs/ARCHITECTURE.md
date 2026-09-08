@@ -1,6 +1,6 @@
 # Architecture
 
-Testloom v0.2 separates raw observations, editable requirements, generated code and execution evidence. The shared contracts live in `src/shared/types.ts`; the service in `src/core/service.ts` owns state and operations. [Validation](VALIDATION.md) records checks separately from this design description.
+Testloom v0.3 separates raw observations, editable requirements, generated code and execution evidence. The shared contracts live in `src/shared/types.ts`; the service in `src/core/service.ts` owns state and operations. [Validation](VALIDATION.md) records checks separately from this design description.
 
 ## Suite and agent pipeline
 
@@ -17,12 +17,18 @@ flowchart TD
     S --> V
     P --> W[Separate source snapshot]
     V --> A{Author each case}
-    A --> X[Codex CLI]
-    A --> Y[Claude Code CLI]
+    A --> X[Codex App Server case thread]
+    A --> Y[Claude Code case session]
     A --> T[Portable templates]
     X --> G[Validate files and case output folders]
     Y --> G
     T --> G
+    W --> Q[Read-only repository tools]
+    Q --> X
+    Q --> Y
+    R --> IMG[Native screenshot attachments]
+    IMG --> X
+    IMG --> Y
     W --> G
     G --> D[Review new files and patch]
     D --> E[Run selected test command]
@@ -56,7 +62,7 @@ The library holds 500 cases and the history retains the latest 100 generation re
 
 ## Source copies and output folders
 
-`repository.ts` inspects a bounded module and copies included regular files into a run workspace outside the source folder. It excludes known dependency/build folders, credential filenames and symlinks, and records a source digest. Limits are 8,000 included files, 20,000,000 bytes per file, 250,000,000 bytes total and directory depth 16. It is not a Git checkout requirement or an atomic filesystem snapshot.
+`repository.ts` inspects a bounded module and copies included regular files into a run workspace outside the source folder. It excludes known dependency/build folders, credential filenames and symlinks, and records a source digest. Default ceilings are 1,000,000 included files, 2 GiB per file, 50 GiB total and directory depth 64. Concurrent traversal and bounded streaming copies report progress and support cancellation. A sorted per-file SHA-256 manifest describes copied bytes and modes; native copy-on-write cloning is attempted when supported. It is not a Git checkout requirement or an atomic filesystem snapshot.
 
 Generation writes only new `.ts`, `.js` or `.java` files below:
 
@@ -65,7 +71,7 @@ Generation writes only new `.ts`, `.js` or `.java` files below:
 
 Paths reject traversal, duplicate names, symlinks and overwrites. Each provider result permits 1–12 files of at most 150,000 characters each; the combined writer caps a batch at 100 files and 5,000,000 code characters. The copy retains `.journeyproof/` for provenance, suite snapshot, generation, patch and verification metadata.
 
-The [agent controls](AGENTS.md) describe cached context, prompt limits and provider-specific restrictions. Agents start in fresh temporary directories; Testloom validates their returned file lists before writing them into the copy. Schema conformance alone does not establish semantic correctness.
+The [agent controls](AGENTS.md) describe cached context, prompt limits and provider-specific restrictions. Agents run in dedicated persistent case directories, with native thread/session IDs recorded in each project library. Their repository tools point to the current source copy. Testloom validates returned file lists before writing proposals into the copy. Context-exclusion changes start a fresh native conversation. See [Case sessions](LARGE-REPOSITORIES.md). Schema conformance alone does not establish semantic correctness.
 
 ## Assurance boundary
 

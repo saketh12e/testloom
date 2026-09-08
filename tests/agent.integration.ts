@@ -33,7 +33,7 @@ try {
     ...service.state.settings,
     provider,
     model: process.env.TESTLOOM_MODEL || '',
-    effort: 'medium',
+    effort: 'max',
     timeoutSeconds: 480,
     claudeBudgetUsd: 1,
   });
@@ -69,7 +69,7 @@ try {
   assert.equal(await digest(service.state.project!.path), before);
   await mkdir('work', { recursive: true });
   await writeFile(
-    `work/${provider}-v2-validation.json`,
+    `work/${provider}-v3-validation.json`,
     JSON.stringify(
       {
         provider,

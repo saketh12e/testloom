@@ -1,0 +1,83 @@
+{
+  "recordedAt": "2026-09-08T16:32:46.293003+00:00",
+  "status": "passed",
+  "benchmark": "tests/repository-scale.integration.ts",
+  "command": "node_modules/.bin/tsx tests/repository-scale.integration.ts",
+  "platform": "darwin",
+  "osRelease": "25.5.0",
+  "node": "v22.22.3",
+  "cpu": "Apple M4",
+  "sourceFiles": 100000,
+  "snapshotFiles": 100001,
+  "bytes": 3277860,
+  "scanPlusSnapshotMs": 22883,
+  "measurements": {
+    "fixtureCreation": {
+      "elapsedMs": 4700,
+      "baselineRssMiB": 73.38,
+      "peakRssMiB": 87.86,
+      "peakHeapUsedMiB": 21.84,
+      "peakExternalMiB": 2.9,
+      "peakArrayBuffersMiB": 0.55,
+      "cpuUserMs": 1659,
+      "cpuSystemMs": 10453,
+      "memorySamplingIntervalMs": 20
+    },
+    "inspect": {
+      "elapsedMs": 166,
+      "baselineRssMiB": 87.59,
+      "peakRssMiB": 135.38,
+      "peakHeapUsedMiB": 51.53,
+      "peakExternalMiB": 2.74,
+      "peakArrayBuffersMiB": 0.39,
+      "cpuUserMs": 207,
+      "cpuSystemMs": 108,
+      "memorySamplingIntervalMs": 20
+    },
+    "snapshotIncludingFreshScan": {
+      "elapsedMs": 22716,
+      "baselineRssMiB": 131.53,
+      "peakRssMiB": 166.28,
+      "peakHeapUsedMiB": 102.11,
+      "peakExternalMiB": 7.2,
+      "peakArrayBuffersMiB": 4.84,
+      "cpuUserMs": 7054,
+      "cpuSystemMs": 25364,
+      "memorySamplingIntervalMs": 20
+    },
+    "independentCopyVerification": {
+      "elapsedMs": 12280,
+      "baselineRssMiB": 131.52,
+      "peakRssMiB": 138.13,
+      "peakHeapUsedMiB": 112.45,
+      "peakExternalMiB": 7.09,
+      "peakArrayBuffersMiB": 4.72,
+      "cpuUserMs": 1857,
+      "cpuSystemMs": 5414,
+      "memorySamplingIntervalMs": 20
+    }
+  },
+  "clonedFiles": 0,
+  "streamedFiles": 100001,
+  "cloneProbe": "COPYFILE_FICLONE_FORCE returned ENOSYS on this runtime; native clone success was not validated, streaming fallback was exercised.",
+  "digest": "be46e210a1945a84a07143f24a44f1b3d947dc1622e7a8ea03cb7abf20b7bc99",
+  "digestAlgorithm": "sha256-sorted-file-manifest-v1",
+  "allCopiedFilesIndependentlyVerified": true,
+  "independentExpectedDigestMatched": true,
+  "noOriginalHardlinksSampled": true,
+  "sourceUnchangedAfterSnapshotEdit": true,
+  "progressCallbacks": {
+    "scan": 4,
+    "snapshot": 47
+  },
+  "defaultProgressIntervalMs": 500,
+  "processPeakRssMiB": 166.28,
+  "fixture": "100000 real tiny TypeScript files in 1000-file shards plus package.json; freshly created local files under repository work/",
+  "scratchRemoved": true,
+  "cleanupMs": 9746,
+  "notes": [
+    "Metrics transcribed from the successful benchmark process output.",
+    "Fixture creation, independent verification, and cleanup are excluded from scanPlusSnapshotMs.",
+    "This synthetic fixture measures file-count scaling, not production application complexity."
+  ]
+}

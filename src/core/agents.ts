@@ -9,7 +9,7 @@ import { scrubText, validateGeneratedFiles } from './repository';
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = Object.freeze({
   provider: 'codex',
   model: '',
-  effort: 'medium',
+  effort: 'max',
   timeoutSeconds: 480,
   instructions: '',
   excludedContextPaths: Object.freeze([]) as unknown as string[],
@@ -19,6 +19,10 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = Object.freeze({
 export interface AgentOptions {
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  session?: { id?: string; cwd: string };
+  onSession?: (id: string) => void;
+  sessionTitle?: string;
+  evidenceImages?: { path: string; mimeType: 'image/png' | 'image/jpeg'; label: string }[];
 }
 export interface AgentResult {
   summary: string;
@@ -59,8 +63,8 @@ export function validateAgentSettings(input: unknown): AgentSettings {
       !/^[a-zA-Z0-9][a-zA-Z0-9_./:\[\]-]{0,159}$/.test(settings.model.trim()))
   )
     throw new Error('Invalid model name.');
-  if (!['low', 'medium', 'high'].includes(settings.effort))
-    throw new Error('Effort must be low, medium, or high.');
+  if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(settings.effort))
+    throw new Error('Choose maximum, extra high, high, medium, or low reasoning effort.');
   if (
     !Number.isInteger(settings.timeoutSeconds) ||
     settings.timeoutSeconds < 30 ||

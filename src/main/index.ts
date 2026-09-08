@@ -46,6 +46,7 @@ function registerHandlers() {
     'delete-case': (input) => service.deleteCase(input),
     'select-case': (input) => service.selectCase(input),
     'save-settings': (input) => service.saveSettings(input),
+    'reset-agent-session': (input) => service.resetAgentSession(input),
     'choose-context-files': async () => {
       if (!service.state.project) throw new Error('Open a project first.');
       const result = await dialog.showOpenDialog(window!, {

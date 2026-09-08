@@ -1,6 +1,6 @@
 # Roadmap
 
-Testloom v0.2 adds persisted case libraries, editable variants, suite exchange, selected batches and configurable Codex/Claude adapters. These are preview capabilities. Broader rollout needs evidence from the environments people will actually use.
+Testloom v0.3 adds native case conversations, screenshot input, maximum reasoning and bounded source tools on top of editable case libraries and selected batches. A synthetic 100,000-source-file scan/copy is measured; real production repository pilots remain necessary. These are preview capabilities. Broader rollout needs evidence from the environments people will actually use.
 
 | Priority | Next work | Evidence needed before calling it ready |
 | --- | --- | --- |

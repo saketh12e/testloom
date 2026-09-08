@@ -573,6 +573,18 @@
             <p id="export-result" class="export-result" role="status" hidden></p>
           </section>
         </main>
+        <section
+          id="generation-scope"
+          class="generation-scope"
+          aria-label="Generation scope"
+          hidden
+        >
+          <p id="generation-data-scope"></p>
+          <p>
+            Proposed tests are written only to an isolated copy; your original stays untouched.
+            Review proposals before verification.
+          </p>
+        </section>
         <footer class="actionbar">
           <div class="actionbar-info">
             <span id="activity-indicator" class="dot"></span>
@@ -592,7 +604,13 @@
             >
               ≡</button
             ><button id="cancel-run" class="button small" hidden>Cancel run</button
-            ><button id="generate" class="button primary" data-mutation hidden>
+            ><button
+              id="generate"
+              class="button primary"
+              aria-describedby="generation-scope"
+              data-mutation
+              hidden
+            >
               Generate test <span aria-hidden="true">↗</span>
             </button>
           </div>
@@ -681,6 +699,21 @@
           </button>
         </div>
         <p id="provider-help" class="field-hint"></p>
+        <section class="session-section" aria-labelledby="session-heading">
+          <div class="section-heading">
+            <h3 id="session-heading">Case session</h3>
+            <span id="session-status" class="badge" role="status" hidden></span>
+          </div>
+          <p id="session-case" class="session-case"></p>
+          <p id="session-details" class="field-hint" hidden></p>
+          <p id="session-help" class="field-hint"></p>
+          <p id="session-native-help" class="field-hint"></p>
+          <p id="session-error" class="inline-error" role="status" hidden></p>
+          <button id="reset-agent-session" class="button small" data-mutation disabled>
+            Start fresh session
+          </button>
+          <p id="session-reset-help" class="field-hint" hidden></p>
+        </section>
         <div id="agent-options">
           <label class="field"
             >Model <span class="optional">optional</span
@@ -691,12 +724,14 @@
               autocomplete="off"
               spellcheck="false"
           /></label>
-          <div class="form-grid">
+          <div class="form-grid agent-limits">
             <label class="field"
               >Reasoning effort<select id="agent-effort" data-mutation>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
+                <option value="xhigh">Extra high</option>
+                <option value="max">Maximum (model-supported)</option>
               </select></label
             ><label class="field"
               >Time per case (seconds)<input
@@ -739,8 +774,13 @@
               Add context files
             </button>
           </div>
+          <div id="repository-summary" class="field-hint" hidden>
+            <strong id="repository-scan"></strong>
+            <p id="repository-scanned-at" hidden></p>
+          </div>
           <p class="field-hint">
-            Checked files are included as generation context. Uncheck a file to exclude it.
+            Checked files are starter context for the prompt, within its size limits. Uncheck a file
+            to exclude it.
           </p>
           <div id="context-paths"></div>
           <p id="context-empty" class="field-hint">Open a project to see its context files.</p>
@@ -751,6 +791,11 @@
             <button id="preview-prompt" class="button small" data-mutation>Preview prompt</button>
           </div>
           <p class="field-hint" id="prompt-help">Preview saves your case and settings first.</p>
+          <p class="field-hint">
+            Agents can use repository tools to inspect more files on demand beyond these starter
+            examples. The preview shows the outgoing prompt; saved session history and later tool
+            results are not included.
+          </p>
           <pre
             id="prompt-preview"
             class="prompt-preview"

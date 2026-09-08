@@ -15,6 +15,7 @@ const api: JourneyAPI = {
   saveSettings: (input) => ipcRenderer.invoke('journey:save-settings', input),
   chooseContextFiles: () => ipcRenderer.invoke('journey:choose-context-files'),
   refreshAgents: () => ipcRenderer.invoke('journey:refresh-agents'),
+  resetAgentSession: (input) => ipcRenderer.invoke('journey:reset-agent-session', input),
   previewPrompt: (input) => ipcRenderer.invoke('journey:preview-prompt', input),
   importSuite: () => ipcRenderer.invoke('journey:import-suite'),
   exportSuite: () => ipcRenderer.invoke('journey:export-suite'),

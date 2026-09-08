@@ -1518,6 +1518,21 @@ input[type='checkbox']:disabled {
   margin-top: 20px;
   overflow-wrap: anywhere;
 }
+.generation-scope {
+  padding: 11px 36px;
+  border-top: 1px solid var(--line);
+  background: #f8faf5;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.generation-scope p {
+  margin: 0;
+}
+.generation-scope p + p {
+  margin-top: 3px;
+}
 .actionbar {
   display: flex;
   align-items: center;
@@ -1757,6 +1772,9 @@ input[type='checkbox']:disabled {
 .drawer-body .field textarea {
   font-size: 11px;
 }
+.agent-limits {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+}
 .availability-row {
   display: flex;
   align-items: center;
@@ -1785,14 +1803,32 @@ input[type='checkbox']:disabled {
   font-size: 11px;
   color: #5e6e59;
 }
+.session-section,
 .context-section,
 .prompt-section {
   border-top: 1px solid var(--line);
   margin-top: 26px;
 }
+.session-section .section-heading,
 .context-section .section-heading,
 .prompt-section .section-heading {
   margin: 22px 0 10px;
+}
+.session-section {
+  margin: 20px 0 26px;
+}
+.session-case {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+#session-details,
+#repository-summary {
+  overflow-wrap: anywhere;
+}
+#repository-scanned-at {
+  margin: 4px 0 0;
 }
 .context-section .field-hint {
   margin-top: 0;

@@ -15,7 +15,7 @@ These references carry forward the v0.1 design review. Testloom combines a local
 
 ## Codex as the primary adapter
 
-The [non-interactive guide](https://learn.chatgpt.com/docs/non-interactive-mode) documents CLI execution, JSON events, schema-constrained final output and saved authentication. Testloom uses that interface with an explicit read-only sandbox and a fresh temporary working directory. It sends the reviewed bounded prompt through stdin, then validates the returned summary, warnings and file list. There is no Codex SDK dependency.
+The [non-interactive guide](https://learn.chatgpt.com/docs/non-interactive-mode) documents CLI execution, JSON events, schema-constrained final output and saved authentication. The v0.2 adapter used that interface with an explicit read-only sandbox and a fresh temporary working directory; v0.3 uses App Server for app-owned persistent case sessions. It sends the reviewed bounded prompt through stdin, then validates the returned summary, warnings and file list. There is no Codex SDK dependency.
 
 Model and effort settings are passed to the installed CLI; the app does not promise every account/model combination. Temporary agent files are cleaned after the invocation. The user's CLI configuration still matters, so an empty working directory is not a claim that all possible local reads or integrations are confined to the prompt. See [Agent controls](AGENTS.md).
 
@@ -44,3 +44,10 @@ Context selection is explicit and bounded: cached tests/helpers/configuration, u
 ## Evidence required for a release claim
 
 Use [VALIDATION.md](VALIDATION.md) for actual commands, versions, environments and outcomes. Keep real browser recording, native desktop, packaged app, Java, each live provider and each batch check distinct. A healthy pass plus the same test failing on a disclosed defect supports that demonstrated behavior. A missing output, timeout or provider outage does not. Prior v0.1 evidence cannot certify the v0.2 feature set.
+
+
+## v0.3 native sessions and repository tools
+
+The installed Codex 0.153.4 App Server JSON schemas were generated locally with experimental fields and checked against [official App Server documentation](https://learn.chatgpt.com/docs/app-server). The integration uses initialize, thread/start, thread/resume, thread/name/set, model/list, turn/start, dynamic tool calls and turn/interrupt. The provider catalog supplies the maximum reasoning level. Live two-turn testing verified native memory, screenshot understanding and fresh backend reads.
+
+Claude Code 2.1.116 CLI help and [programmatic-session documentation](https://code.claude.com/docs/en/headless) established native session IDs/resume, named sessions, stream-json image input and max effort. A strict local [MCP stdio transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) exposes only bounded repository tools. Protocol tests pass; live session initialization succeeded but the configured API rejected authentication with HTTP 401. No account routing was changed.

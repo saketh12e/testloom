@@ -16,6 +16,7 @@ export interface Project {
   outputDir: string;
   isDemo?: boolean;
   demoPort?: number;
+  repository?: { fileCount: number; scannedAt: string; scanDurationMs: number };
 }
 export interface LocatorSpec {
   strategy: 'testId' | 'role' | 'label' | 'placeholder' | 'text' | 'css';
@@ -93,7 +94,7 @@ export type AgentProvider = 'codex' | 'claude' | 'portable';
 export interface AgentSettings {
   provider: AgentProvider;
   model: string;
-  effort: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   timeoutSeconds: number;
   instructions: string;
   excludedContextPaths: string[];
@@ -103,6 +104,18 @@ export interface AgentStatus {
   available: boolean;
   version?: string;
   path?: string;
+}
+export interface AgentSessionRecord {
+  caseId: string;
+  provider: 'codex' | 'claude';
+  id: string;
+  cwd: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: number;
+  status: 'ready' | 'running' | 'failed';
+  lastError?: string;
+  contextKey?: string;
 }
 export type CaseKind = 'positive' | 'negative' | 'boundary';
 export interface TestCase {
@@ -132,7 +145,7 @@ export interface AppState {
   scenario?: Scenario;
   generation?: Generation;
   verification?: Verification;
-  phase: 'idle' | 'recording' | 'generating' | 'verifying';
+  phase: 'idle' | 'indexing' | 'recording' | 'generating' | 'verifying';
   activity: { time: string; message: string }[];
   error?: string;
   codex: AgentStatus;
@@ -141,6 +154,7 @@ export interface AppState {
   activeCaseId?: string;
   settings: AgentSettings;
   history: RunRecord[];
+  agentSessions?: AgentSessionRecord[];
   workspaceRoot: string;
 }
 export interface JourneyAPI {
@@ -161,6 +175,7 @@ export interface JourneyAPI {
   selectCase(input: { id: string }): Promise<AppState>;
   saveSettings(input: AgentSettings): Promise<AppState>;
   refreshAgents(): Promise<AppState>;
+  resetAgentSession(input: { caseId: string; provider: 'codex' | 'claude' }): Promise<AppState>;
   chooseContextFiles(): Promise<AppState>;
   previewPrompt(input: { caseId?: string }): Promise<string>;
   importSuite(): Promise<AppState>;

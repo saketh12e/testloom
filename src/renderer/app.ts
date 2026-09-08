@@ -56,8 +56,9 @@ const strategies: [LocatorSpec['strategy'], string][] = [
   ['text', 'Text'],
   ['css', 'CSS selector'],
 ];
-const phases = {
+const phases: Record<AppState['phase'], string> = {
   idle: 'Ready when you are.',
+  indexing: 'Indexing your repository',
   recording: 'Recording your browser',
   generating: 'Generating your tests',
   verifying: 'Verifying the outcome',
@@ -65,7 +66,7 @@ const phases = {
 const defaults: AgentSettings = {
   provider: 'codex',
   model: '',
-  effort: 'medium',
+  effort: 'max',
   timeoutSeconds: 480,
   instructions: '',
   excludedContextPaths: [],
@@ -111,6 +112,10 @@ let savedFocus: HTMLElement | null = null;
 const retainedDrafts = new Map<string, TestCase>();
 const idle = () => !!api && !!state && state.phase === 'idle' && !pending;
 const activeCase = () => state?.cases.find((item) => item.id === state?.activeCaseId);
+const selectedAgentSession = () =>
+  state?.agentSessions?.find(
+    (session) => session.caseId === activeCase()?.id && session.provider === settingsDraft.provider,
+  );
 const mutable = <T extends HTMLElement>(node: T): T => {
   node.dataset.mutation = '';
   return node;
@@ -341,6 +346,21 @@ function renderControls() {
     ids.length > 0 &&
     candidateCases.every((item) => item?.enabled && item.scenario.assertions.length > 0);
   show('generate', !!state?.project && currentPage !== 'results' && !recording);
+  show(
+    'generation-scope',
+    !!state?.project && currentPage !== 'results' && !recording && ids.length > 0,
+  );
+  const screenshotCount = candidateCases.reduce(
+    (total, item) =>
+      total + (item?.scenario.events.filter((event) => !!event.screenshot).length ?? 0),
+    0,
+  );
+  text(
+    'generation-data-scope',
+    settings.provider === 'portable'
+      ? 'Portable uses the selected interaction ledger and supported expectations locally. No provider request is made.'
+      : `Sent to ${providers[settings.provider]}: the selected interaction ledger, ${plural(screenshotCount, 'screenshot')} and expectations, plus repository context read on demand.`,
+  );
   enable('generate', ready && canGenerate && available);
   text(
     'generate',
@@ -357,12 +377,18 @@ function renderControls() {
       : !available
         ? `${providers[settings.provider]} is unavailable. Open Agent settings to choose an available generator.`
         : 'Save the case and generate tests';
-  const inFlight = state?.phase === 'generating' || state?.phase === 'verifying';
+  const inFlight =
+    state?.phase === 'indexing' || state?.phase === 'generating' || state?.phase === 'verifying';
+  const phaseLabel =
+    state?.phase === 'indexing' ? phases.indexing : pending || (state ? phases[state.phase] : '');
   show('cancel-run', inFlight);
   enable('cancel-run', !cancelling);
-  text('cancel-run', cancelling ? 'Cancelling…' : 'Cancel run');
+  text(
+    'cancel-run',
+    cancelling ? 'Cancelling…' : state?.phase === 'indexing' ? 'Cancel scan' : 'Cancel run',
+  );
   show('phase-chip', !!pending || !!inFlight);
-  text('phase-chip', pending || (state ? phases[state.phase] : ''));
+  text('phase-chip', phaseLabel);
   $('activity-indicator').classList.toggle(
     'busy',
     !!pending || (!!state && state.phase !== 'idle'),
@@ -400,7 +426,7 @@ function renderControls() {
       : 'Generate a case to see the result.';
   }
   if (pending || (state?.phase && state.phase !== 'idle')) {
-    footerTitle = pending || phases[state!.phase];
+    footerTitle = phaseLabel;
     footerDetail = state?.activity.at(-1)?.message || 'Tests are created in a separate copy.';
   }
   text('footer-title', footerTitle);
@@ -412,6 +438,11 @@ function renderControls() {
   show('discard-settings', settingsDirty);
   enable('preview-prompt', ready && !!draft && !!state?.project);
   enable('add-context-files', ready && !!state?.project);
+  const session = selectedAgentSession();
+  enable(
+    'reset-agent-session',
+    ready && !!activeCase() && !!session && session.status !== 'running',
+  );
   text('settings-save-status', settingsDirty ? 'Unsaved settings' : 'All settings saved');
   enable('close-record', !pending);
   enable('cancel-record', !pending);
@@ -853,6 +884,16 @@ function renderSettings() {
     $<HTMLTextAreaElement>('agent-instructions').value = settingsDraft.instructions;
   }
   renderProvider();
+  const repository = state?.project?.repository;
+  show('repository-summary', !!state?.project);
+  text(
+    'repository-scan',
+    repository
+      ? `${repository.fileCount.toLocaleString()} indexed ${repository.fileCount === 1 ? 'file' : 'files'} · scan ${repository.scanDurationMs < 1000 ? `${Math.round(repository.scanDurationMs)} ms` : `${(repository.scanDurationMs / 1000).toFixed(1)} s`}`
+      : 'Repository scan details are unavailable. Reconnect the project to refresh.',
+  );
+  show('repository-scanned-at', !!repository);
+  text('repository-scanned-at', repository ? `Scanned ${formatDate(repository.scannedAt)}` : '');
   const paths = state?.project?.examples.map((example) => example.path) ?? [];
   const context = JSON.stringify([state?.project?.id, paths]);
   if (contextSignature !== context) {
@@ -919,6 +960,41 @@ function renderProvider() {
         ? 'Uses your local Claude setup. Time and spending limits apply separately to each case in a batch.'
         : 'Uses your local Codex setup. The time limit applies separately to each case in a batch.',
   );
+  renderAgentSession();
+}
+function renderAgentSession() {
+  const provider = settingsDraft.provider;
+  const item = activeCase();
+  const session = selectedAgentSession();
+  const usesAgent = provider !== 'portable';
+  text('session-case', item ? draft?.name || item.name : 'Open a case to view its agent session.');
+  show('session-status', usesAgent && !!item);
+  text('session-status', session ? capitalize(session.status) : 'New session');
+  $('session-status').className = `badge ${session?.status ?? ''}`;
+  show('session-details', usesAgent && !!item);
+  text(
+    'session-details',
+    session
+      ? `${providers[provider]} · ${plural(session.turns, 'turn')} · ${session.id.slice(0, 8)}${session.id.length > 8 ? '…' : ''}`
+      : `${providers[provider]} · Starts with the next generation`,
+  );
+  $('session-details').title = session ? `Session ${session.id}` : '';
+  text(
+    'session-help',
+    usesAgent
+      ? 'New cases start fresh. Regenerating continues this case’s conversation.'
+      : 'Portable does not use agent sessions. Codex and Claude keep their own case memory.',
+  );
+  show('session-error', usesAgent && !!session?.lastError);
+  text('session-error', session?.lastError ?? '');
+  show('reset-agent-session', usesAgent && !!session);
+  show('session-native-help', usesAgent);
+  text(
+    'session-native-help',
+    provider === 'claude' ? 'Saved by Claude Code on this Mac.' : 'Saved by Codex on this Mac.',
+  );
+  show('session-reset-help', usesAgent && !!session);
+  text('session-reset-help', `Starts a new conversation for this case. Previous history is kept.`);
 }
 function renderWarnings(id: string, warnings: string[]) {
   show(id, warnings.length > 0);
@@ -1754,6 +1830,19 @@ $('refresh-agents').addEventListener(
       toast('Agent availability refreshed.');
     }),
 );
+$('reset-agent-session').addEventListener('click', () => {
+  const item = activeCase();
+  const provider = settingsDraft.provider;
+  const session = selectedAgentSession();
+  if (!item || provider === 'portable' || !session || session.status === 'running') return;
+  void perform('Starting fresh session', async () => {
+    await callState(() => api!.resetAgentSession({ caseId: item.id, provider }));
+    invalidatePrompt();
+    toast(
+      `${providers[provider]} will start fresh on the next generation. Old native history is kept.`,
+    );
+  });
+});
 $('add-context-files').addEventListener(
   'click',
   () =>

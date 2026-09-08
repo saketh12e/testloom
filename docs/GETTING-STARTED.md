@@ -1,6 +1,6 @@
 # Getting started with Testloom
 
-Testloom v0.2.1 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
+Testloom v0.3.0 is an ad-hoc signed Apple Silicon developer preview without Apple notarization. Start with the synthetic cart before connecting a trusted project. You need **Node.js 20.19+**, npm and Chromium for this walkthrough.
 
 ## Install and launch
 
@@ -12,7 +12,7 @@ npm run browsers
 npm start
 ```
 
-For a downloaded app, use the v0.2.1 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.2.1). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
+For a downloaded app, use the v0.3.0 Apple Silicon asset in [Releases](https://github.com/saketh12e/testloom/releases/tag/v0.3.0). Replace the v0.2.0 app, which had an incomplete bundle signature. Follow [Mac installation help](MAC-OPENING.md) for checksum verification and opening a trusted preview. The new signature is not Apple Developer ID signing or notarization. [Migration](MIGRATION.md) explains existing JourneyProof installations.
 
 For the downloaded app, install Node.js 20.19+ and its recording/test browser once:
 
@@ -21,6 +21,10 @@ npx playwright@1.63.0 install chromium
 ```
 
 Portable generation needs no AI account. Codex is the primary agent option; install its [official CLI](https://developers.openai.com/codex/cli), check `codex --version`, and run `codex login`. For Claude, install and authenticate the official Claude Code CLI and check `claude --version`. Refresh agent availability after setup. Availability means the executable responds, not that account access or generation has been validated. See [agent setup and controls](AGENTS.md).
+
+## Case sessions and large repositories
+
+Generate creates or resumes a dedicated native session for each selected case and provider. Captured screenshots are attached alongside the ledger and written expectations. The agent can inspect the isolated source copy through read-only tools and returns proposed files for review. It cannot edit the original project. Agent settings shows the session ID, turns, reset control and repository file count. **Maximum** reasoning is the new default; saved lower choices remain respected. See [large repositories and sessions](LARGE-REPOSITORIES.md) for measured 100,000-file support and memory boundaries.
 
 ## Run the three sample cases
 
@@ -78,7 +82,7 @@ Choose the test module folder, review the detected framework and example tests, 
 
 Inspection is heuristic: npm/Maven/Gradle detection and Selenium clues do not establish universal compatibility. Portable targets are Playwright TypeScript and Playwright Java/JUnit 5; see the [Java example](../examples/java/README.md). Custom assertions and unsupported recording steps need an agent proposal or manual implementation and review.
 
-Snapshots support up to 8,000 included files, 20 MB per file and 250 MB total, with bounded directory depth. Choose a smaller module when necessary. Exclusions can remove needed dependencies or configuration. The copy is not an OS sandbox: execute only project commands you trust.
+Snapshot defaults allow up to 1,000,000 included files, 2 GiB per file and 50 GiB total, with depth 64. A 100,000-source-file synthetic fixture has been measured; these larger ceilings are not a performance guarantee. See [large repositories](LARGE-REPOSITORIES.md) for progress, cancellation and benchmark scope. Exclusions can remove needed dependencies or configuration. The copy is not an OS sandbox: execute only project commands you trust.
 
 ## Troubleshooting
 
