@@ -84,13 +84,17 @@ jobs:
           SOURCE_RUN: ${{ inputs.source_run }}
         run: |
           tag="v$RELEASE_VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/commits/$tag" > "$RUNNER_TEMP/tag-commit.json" 2>/dev/null; then
+            node -e 'const fs=require("fs"); if(JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/tag-commit.json")).sha!==process.env.SOURCE_SHA) throw Error("Existing tag points to another commit");'
+          fi
           if gh release view "$tag" --json isDraft,targetCommitish > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
             node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/existing-release.json")); if(!r.isDraft || r.targetCommitish!==process.env.SOURCE_SHA) throw Error("Refusing to replace an existing published or unrelated release");'
           else
             gh release create "$tag" --target "$SOURCE_SHA" --draft --prerelease --title "Testloom $tag — included recording browser and Intel Mac support" --notes-file "docs/RELEASE-$RELEASE_VERSION.md"
           fi
           gh release upload "$tag" distribution/* --clobber
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > "$RUNNER_TEMP/uploaded-release.json"
+          release_api="$(gh release view "$tag" --json apiUrl --jq .apiUrl)"
+          gh api "$release_api" > "$RUNNER_TEMP/uploaded-release.json"
           node <<'JS'
           const fs = require('fs'), crypto = require('crypto');
           const release = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/uploaded-release.json'));
