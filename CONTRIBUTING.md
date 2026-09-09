@@ -62,3 +62,7 @@ Describe the concrete problem and resulting behavior. Include relevant commands,
 CI checks types/build/regressions, the recorded-journey and suite fixtures and cart checks without provider credentials. It is not a live Codex/Claude validation, full native UI test or release publication. Use the version-specific [validation record](docs/VALIDATION.md) for release claims.
 
 Keep credentials, private source, browser state, personal screenshots and local run workspaces out of contributions. Report vulnerabilities through [SECURITY.md](SECURITY.md). The [roadmap](docs/ROADMAP.md) identifies useful work and the evidence needed for it.
+
+## Publishing a verified Mac release
+
+Run the **Publish verified Mac release** workflow manually with the successful CI run ID and its exact 40-character main-branch commit. It requires both native Mac artifacts, checks the source run, verifies browser payloads and signatures again, and compares uploaded asset hashes before publishing the draft. Published releases cannot be overwritten by this workflow. This distributes the files tested in CI and does not depend on the maintainer downloading and rebuilding them locally. It does not perform Apple notarization.

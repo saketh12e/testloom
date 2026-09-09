@@ -1,0 +1,103 @@
+name: Publish verified Mac release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful CI run with both native Mac artifacts
+        required: true
+      source_sha:
+        description: Exact 40-character commit tested by that run
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: testloom-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Verify source CI provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/source-run.json")); if(r.conclusion!=="success" || r.status!=="completed" || r.head_sha!==process.env.SOURCE_SHA || r.head_branch!=="main" || r.event!=="push" || r.path!==".github/workflows/ci.yml" || r.head_repository.full_name!==process.env.GITHUB_REPOSITORY) throw Error("Source run is not a successful trusted main-branch CI run");'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run }}
+          pattern: testloom-mac-*
+          merge-multiple: true
+          path: verified-artifacts
+      - name: Verify and prepare distributed files
+        env:
+          SOURCE_RUN: ${{ inputs.source_run }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(find verified-artifacts -type f | wc -l | tr -d ' ')" -eq 2
+          mkdir distribution
+          for arch in arm64 x64; do
+            archive="verified-artifacts/Testloom-$version-$arch-mac.zip"
+            test -f "$archive"
+            node scripts/verify-recording-browser.mjs "$archive" --arch "$arch"
+            extracted="$(mktemp -d "$RUNNER_TEMP/release-signature.XXXXXX")"
+            ditto -x -k "$archive" "$extracted"
+            codesign --verify --deep --strict "$extracted/Testloom.app"
+            rm -rf "$extracted"
+            cp "$archive" "distribution/Testloom-$version-mac-$arch.zip"
+          done
+          git archive --format=zip --prefix="Testloom-$version/" -o "distribution/Testloom-$version-source.zip" "$SOURCE_SHA"
+          cp "docs/RELEASE-$version.md" "distribution/TESTLOOM-$version-START-HERE.md"
+          node -e 'const fs=require("fs"); const v=require("./package.json").version; fs.writeFileSync(`distribution/TESTLOOM-${v}-PROVENANCE.json`,JSON.stringify({version:v,sourceSha:process.env.SOURCE_SHA,sourceRun:process.env.SOURCE_RUN,sourceRunUrl:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.SOURCE_RUN}`,nativePlatforms:["macos-arm64","macos-x64"],notarized:false},null,2)+"\n");'
+          (cd distribution && shasum -a 256 ./* > "TESTLOOM-$version-SHA256SUMS.txt")
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Publish only after uploaded asset hashes match
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+        run: |
+          tag="v$RELEASE_VERSION"
+          if gh release view "$tag" --json isDraft,targetCommitish > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
+            node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/existing-release.json")); if(!r.isDraft || r.targetCommitish!==process.env.SOURCE_SHA) throw Error("Refusing to replace an existing published or unrelated release");'
+          else
+            gh release create "$tag" --target "$SOURCE_SHA" --draft --prerelease --title "Testloom $tag — included recording browser and Intel Mac support" --notes-file "docs/RELEASE-$RELEASE_VERSION.md"
+          fi
+          gh release upload "$tag" distribution/* --clobber
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > "$RUNNER_TEMP/uploaded-release.json"
+          node <<'JS'
+          const fs = require('fs'), crypto = require('crypto');
+          const release = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/uploaded-release.json'));
+          if (!release.draft || release.target_commitish !== process.env.SOURCE_SHA) throw Error('Unexpected release target');
+          const files = fs.readdirSync('distribution');
+          if (release.assets.length !== files.length) throw Error('Unexpected release assets');
+          for (const file of files) {
+            const asset = release.assets.find(a => a.name === file);
+            const data = fs.readFileSync('distribution/' + file);
+            const digest = 'sha256:' + crypto.createHash('sha256').update(data).digest('hex');
+            if (!asset || asset.state !== 'uploaded' || asset.size !== data.length || asset.digest !== digest) throw Error('Uploaded asset did not match: ' + file);
+          }
+          JS
+          gh release edit "$tag" --draft=false
