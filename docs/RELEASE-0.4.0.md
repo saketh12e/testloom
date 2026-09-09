@@ -11,6 +11,8 @@ The previous release could stop after an installed browser crashed without tryin
 - A validated startup report persists across app restarts and can be exported from a failed recording dialog or Help. It contains app/browser/OS versions, process architecture, attempted browsers, failure categories and any available exit code/signal. No URL, recording, raw browser log, environment dump or personal file path is exported.
 - Packaging checks complete browser resources, executable architecture, pinned dependency versions and sealed app signatures before archiving and after extraction. CI runs separate native Apple Silicon and Intel jobs, including actual recording from the ZIP with an empty browser cache and no Node on the app's PATH.
 
+- Native Intel validation also exposed quadratic scanning of large agent responses. The output reader now scans newly decoded text once while preserving its existing byte limits.
+
 ## Install
 
 Use macOS 14 or later. Choose **mac-arm64** for Apple Silicon (M-series) or **mac-x64** for Intel. Quit the old app, extract the matching ZIP and replace Testloom.app in Applications. Existing cases remain in Application Support. The included browser increases download size.

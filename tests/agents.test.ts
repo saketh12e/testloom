@@ -595,3 +595,23 @@ test('provider relay enforces process timeout and aborts oversized unterminated 
     /record size/,
   );
 });
+
+test('large fragmented records keep exact UTF-8 bounds across newline and final records', () => {
+  const payload = { text: '₹💡'.repeat(120_000) };
+  const encoded = Buffer.from(JSON.stringify(payload));
+  const values: unknown[] = [];
+  const parser = new BoundedNdjson((value) => values.push(value), encoded.length);
+  for (let offset = 0; offset < encoded.length; offset += 4093)
+    parser.push(encoded.subarray(offset, offset + 4093));
+  parser.push(Buffer.from('\n{"last":true}'));
+  parser.finish();
+  assert.deepEqual(values, [payload, { last: true }]);
+  const oversized = new BoundedNdjson(
+    () => assert.fail('Oversized record was accepted'),
+    encoded.length - 1,
+  );
+  assert.throws(() => {
+    for (let offset = 0; offset < encoded.length; offset += 4093)
+      oversized.push(encoded.subarray(offset, offset + 4093));
+  }, /record size/);
+});

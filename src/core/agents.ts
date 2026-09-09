@@ -209,6 +209,7 @@ export function validateAgentResult(
 export class BoundedNdjson {
   private decoder = new StringDecoder('utf8');
   private pending = '';
+  private pendingBytes = 0;
   private bytes = 0;
   constructor(
     private receive: (event: unknown) => void,
@@ -221,16 +222,25 @@ export class BoundedNdjson {
       throw new Error('Agent output exceeded the generation size limit.');
     this.consume(this.decoder.write(chunk));
   }
-  private consume(text: string): void {
-    this.pending += text;
-    let newline: number;
-    while ((newline = this.pending.indexOf('\n')) !== -1) {
-      const line = this.pending.slice(0, newline);
-      this.pending = this.pending.slice(newline + 1);
-      this.parse(line);
-    }
-    if (Buffer.byteLength(this.pending) > this.lineLimit)
+  private append(text: string): void {
+    this.pendingBytes += Buffer.byteLength(text);
+    if (this.pendingBytes > this.lineLimit)
       throw new Error('Agent output exceeded the record size limit.');
+    this.pending += text;
+  }
+  private consume(text: string): void {
+    // Scan and count only newly decoded bytes. Re-scanning a growing multi-MB
+    // record on every transport frame makes large responses quadratic on slower Macs.
+    let start = 0;
+    let newline: number;
+    while ((newline = text.indexOf('\n', start)) !== -1) {
+      this.append(text.slice(start, newline));
+      this.parse(this.pending);
+      this.pending = '';
+      this.pendingBytes = 0;
+      start = newline + 1;
+    }
+    this.append(text.slice(start));
   }
   private parse(line: string): void {
     if (Buffer.byteLength(line) > this.lineLimit)
@@ -248,6 +258,7 @@ export class BoundedNdjson {
     this.consume(this.decoder.end());
     if (this.pending.trim()) this.parse(this.pending);
     this.pending = '';
+    this.pendingBytes = 0;
   }
 }
 
