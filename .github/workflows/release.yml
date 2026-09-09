@@ -60,6 +60,10 @@ jobs:
           mkdir distribution
           for arch in arm64 x64; do
             archive="verified-artifacts/Testloom-$version-$arch-mac.zip"
+            # electron-builder omits the arch suffix for its default Intel target.
+            if [[ "$arch" == x64 && ! -f "$archive" ]]; then
+              archive="verified-artifacts/Testloom-$version-mac.zip"
+            fi
             test -f "$archive"
             node scripts/verify-recording-browser.mjs "$archive" --arch "$arch"
             extracted="$(mktemp -d "$RUNNER_TEMP/release-signature.XXXXXX")"
